@@ -1,6 +1,7 @@
 import pytest  # noqa: F401
 from pathlib import Path  # noqa F401
 
+import torchvision
 import numpy as np
 
 from binarization import dataset
@@ -251,4 +252,26 @@ class TestGetStartingRandomPosition:
         expected = 0
         actual = dataset.get_starting_random_position(height, patch_size)
         assert actual == expected
+
+def test_compose():
+    ds = torchvision.datasets.FakeData(
+        size=2,
+        image_size=(3, 16, 16),
+        num_classes=2,
+        random_offset=42,
+    )
+    it = iter(ds)
+    x, _ = next(it)
+    y, _ = next(it)
+    torchvision_compose = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        lambda x: (x - 0.5) * 2.0,
+    ])
+    expected = torchvision_compose(x)
+    my_compose = dataset.compose(
+        torchvision.transforms.ToTensor(),
+        lambda x: (x - 0.5) * 2.0,
+    )
+    actual = my_compose(x)
+    assert expected.equal(actual)
 

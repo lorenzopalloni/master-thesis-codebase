@@ -1,10 +1,16 @@
 import itertools
+import functools
 from pathlib import Path
 from typing import List, Tuple, Union
 
 import torch
 import torchvision
 import numpy as np
+
+
+def compose(*functions):
+    """Allow to easily compose several functions together"""
+    return functools.reduce(lambda f, g: lambda x: g(f(x)), functions)
 
 
 def get_starting_random_position(x: int, patch_size: int) -> int:
@@ -171,3 +177,4 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         lq, hq = custom_transform(lq), custom_transform(hq)
 
         return lq, hq
+
