@@ -1,0 +1,5 @@
+[flake8]
+ignore = E701,W391
+exclude = .git,data
+max-line-length = 79
+
