@@ -100,3 +100,4 @@ def test_prepare_directories(tmp_path):
     assert (d / 'encoded').is_dir()
     assert (d / 'original_frames').is_dir()
     assert (d / 'encoded_frames').is_dir()
+

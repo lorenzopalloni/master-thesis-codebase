@@ -1,6 +1,9 @@
-*.vscode/
+.vscode/
 data/
-tests/assets/
+tests/assets/encoded_frames/
+tests/assets/original_frames/
+tests/assets/encoded/
+
 notebooks/
 samples/
 literature/

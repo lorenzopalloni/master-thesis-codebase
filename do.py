@@ -1,26 +1,35 @@
-import os
 import argparse
 import subprocess
 from pathlib import Path
 
-def check_venv():
-    if not 'VIRTUAL_ENV' in os.environ.keys():
-        raise Exception('Environmental variable VIRTUAL_ENV is not defined.')
-    if not Path(os.environ['VIRTUAL_ENV']).name == 'binarization':
-        subprocess.run('source ~/.venv/binarization/bin/activate') 
+
+def set_up_test_assets():
+    current_dir = Path()
+    tests_dir = current_dir / 'tests'
+    assets_dir = tests_dir / 'assets'
+    original_dir = assets_dir / 'original'
+    encoded_dir = assets_dir / 'encoded'
+    if not encoded_dir.exists():
+        subprocess.run(
+            'python ./binarization/video_preprocessing.py -i '
+            f'{original_dir.as_posix()}'.split(' ')
+        )
+
 
 def do_test():
-    check_venv()
+    set_up_test_assets()
     subprocess.run('python -m pytest tests -vv'.split(' '))
 
+
 def do_coverage():
-    check_venv()
+    set_up_test_assets()
     subprocess.run('coverage run -m pytest tests'.split(' '))
     subprocess.run('coverage report -m'.split(' '))
 
+
 def main():
     parser = argparse.ArgumentParser(
-        prog='dopy',
+        prog='python do.py',
         description='Run custom configurations.'
     )
     parser.add_argument(
@@ -38,6 +47,6 @@ def main():
     }
     command_dict[args.command]()
 
+
 if __name__ == '__main__':
     main()
-
