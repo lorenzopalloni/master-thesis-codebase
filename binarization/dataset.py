@@ -1,3 +1,5 @@
+# TODO: refactor CustomPyTorchDataset using function composition
+
 import itertools
 import functools
 from pathlib import Path
@@ -9,7 +11,7 @@ import numpy as np
 
 
 def compose(*functions):
-    """Allow to easily compose several functions together"""
+    """Compose several functions together."""
     return functools.reduce(lambda f, g: lambda x: g(f(x)), functions)
 
 
@@ -114,7 +116,7 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
             encoded_frames_dir (Union[Path, str]): Encoded frames directory.
             patch_size (int): Width/height of a training patch.
                 A training patch will be choosen at random from a given frame.
-            eval (bool, optional): Training vs evaluation phase.
+            training (bool, optional): Flag for training vs evaluation phase.
                 Defaults to False.
             train_pct (float, optional): Percentage of training data.
                 Defaults to 0.8. Random portion of the whole data used
@@ -147,7 +149,7 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         self.upscaling_factor = upscaling_factor
 
     def __len__(self):
-        return self.train_size if not self.eval else self.val_size
+        return self.train_size if self.training else self.val_size
 
     def __getitem__(self, i):
         i = index_handler(i, self.train_size, self.val_size, self.training)
@@ -177,4 +179,3 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         lq, hq = custom_transform(lq), custom_transform(hq)
 
         return lq, hq
-

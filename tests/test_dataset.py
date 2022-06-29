@@ -253,6 +253,7 @@ class TestGetStartingRandomPosition:
         actual = dataset.get_starting_random_position(height, patch_size)
         assert actual == expected
 
+
 def test_compose():
     ds = torchvision.datasets.FakeData(
         size=2,

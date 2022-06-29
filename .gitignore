@@ -3,6 +3,7 @@ data/
 tests/assets/encoded_frames/
 tests/assets/original_frames/
 tests/assets/encoded/
+comments.md
 
 notebooks/
 samples/
