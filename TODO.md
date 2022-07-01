@@ -7,6 +7,7 @@ TODO List
 
 ## high priority
 
+- use ./binarization/models/ to store each architecture in a single file
 - choose an implementation for the unet
 - understand better the changes that has been done on the unet from Vaccaro
 - understand the details of the GAN framework in Vaccaro's repo and the

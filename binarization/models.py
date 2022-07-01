@@ -296,93 +296,104 @@ def sr_espcn(n_filters, scale_factor=2, out_channels=3, kernel_size=1):
     )
 
 
-
-"""
-in_dim (float, optional):
-    channel dimension of the input
-n_class (str).
-    channel dimension of the output
-n_filters (int, optional)
-    number of filters of the first channel. after layer it gets multiplied by 2 during the encoding stage,
-    and divided during the decoding
-downsample (None or float, optional):
-    can be used for downscaling the output. e.g., if you use downsample=0.5 the output resolution will be halved
-residual (bool):
-    if using the residual scheme and adding the input to the final output
-scale_factor (int):
-    basic upscale factor. if you want a rational upscale (e.g. 720p to 1080p, which is 1.5) combine it
-    with the downsample parameter
-"""
-
 class UNet(torch.nn.Module):
     def __init__(
         self,
-        in_dim: int = 3,
-        n_class: int = 3,
-        n_filters: int = 32,
+        in_channels: int = 3,
+        num_classes: int = 3,
+        num_filters: int = 64,
         downsample: Optional[float] = None,
         use_residual: bool = True,
-        use_batc_norm: bool = False,
+        use_batch_norm: bool = False,
         scale_factor: float = 2.0,
     ):
+        """U-Net initializer.
+
+        Args:
+            in_channels (int, optional): Channel dimension of the input.
+                Defaults to 3.
+            num_classes (int, optional): Channel dimension of the output.
+                Defaults to 3.
+            num_filters (int, optional): Number of filters in the first hidden
+                layer. Each of the following layers gets twice the number of
+                filters of its previous layer during encoding phase, and half
+                the number of filters of its previous layer during decoding
+                phase. Defaults to 64.
+            downsample (Optional[float], optional): Flag for downscaling the
+                output. For instance, with `downsample` == 0.5, the output
+                resolution will be half the original resolution of the input.
+                Defaults to None.
+            use_residual (bool): Flag for residual scheme, that concatenates
+                the input to the final output. Defaults to True.
+            use_batch_norm (bool): Flag for batch_normalization. Defaults to
+                False.
+            scale_factor (float): Rational upscaling factor (e.g., 720p to
+                1080p, with `scale_factor` == 1.5). It should be provided in
+                combination with `downsample` parameter. Defaults to 2.0.
+        """
         super().__init__()
 
         self.use_residual = use_residual
-        self.n_class = n_class
+        self.num_classes = num_classes
         self.scale_factor = scale_factor
 
         self.dconv_down1 = layer_generator(
-            in_dim, n_filters, use_batch_norm=False
+            in_channels,
+            num_filters,
+            use_batch_norm=False
         )
         self.dconv_down2 = layer_generator(
-            n_filters, n_filters * 2, use_batch_norm=batchnorm, n_blocks=2
+            num_filters,
+            num_filters * 2,
+            use_batch_norm=use_batch_norm,
         )
         self.dconv_down3 = layer_generator(
-            n_filters * 2, n_filters * 4, use_batch_norm=batchnorm, n_blocks=2
+            num_filters * 2,
+            num_filters * 4,
+            use_batch_norm=use_batch_norm,
         )
         self.dconv_down4 = layer_generator(
-            n_filters * 4, n_filters * 8, use_batch_norm=batchnorm, n_blocks=2
+            num_filters * 4,
+            num_filters * 8,
+            use_batch_norm=use_batch_norm,
         )
 
-        self.maxpool = nn.MaxPool2d(2)
-        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
+        self.maxpool = torch.nn.MaxPool2d(2)
+        self.upsample = torch.nn.Upsample(scale_factor=2, mode='bilinear')
 
         self.dconv_up3 = layer_generator(
-            n_filters * 8 + n_filters * 4,
-            n_filters * 4,
-            use_batch_norm=batchnorm,
-            n_blocks=2,
+            num_filters * 8 + num_filters * 4,
+            num_filters * 4,
+            use_batch_norm=use_batch_norm,
         )
         self.dconv_up2 = layer_generator(
-            n_filters * 4 + n_filters * 2,
-            n_filters * 2,
-            use_batch_norm=batchnorm,
-            n_blocks=2,
+            num_filters * 4 + num_filters * 2,
+            num_filters * 2,
+            use_batch_norm=use_batch_norm,
         )
         self.dconv_up1 = layer_generator(
-            n_filters * 2 + n_filters,
-            n_filters,
+            num_filters * 2 + num_filters,
+            num_filters,
             use_batch_norm=False,
-            n_blocks=2,
         )
 
         sf = self.scale_factor * (2 if self.use_s2d else 1)
 
-        self.to_rgb = nn.Conv2d(n_filters, 3, kernel_size=1)
+        self.to_rgb = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
         if sf > 1:
-            self.conv_last = nn.Conv2d(
-                n_filters, (sf**2) * n_class, kernel_size=1, padding=0
+            self.conv_last = torch.nn.Conv2d(
+                num_filters, (sf**2) * num_classes, kernel_size=1, padding=0
             )
-            self.pixel_shuffle = nn.PixelShuffle(sf)
+            self.pixel_shuffle = torch.nn.PixelShuffle(sf)
         else:
-            self.conv_last = nn.Conv2d(n_filters, 3, kernel_size=1)
+            self.conv_last = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
 
         if downsample is not None and downsample != 1.0:
             self.downsample = torch.nn.Upsample(
                 scale_factor=downsample, mode='bicubic', align_corners=True
             )
         else:
-            self.downsample = nn.Identity()
+            self.downsample = torch.nn.Identity()
         self.layers = [
             self.dconv_down1,
             self.dconv_down2,
@@ -427,11 +438,13 @@ class UNet(torch.nn.Module):
         if sf > 1:
             x = self.pixel_shuffle(x)
         if self.residual:
-            sf = (
-                self.scale_factor
-            )  # (self.scale_factor // (2 if self.use_s2d and self.scale_factor > 1 else 1))
+            sf = self.scale_factor
+            # sf = (self.scale_factor // (
+            #   2 if self.use_s2d and self.scale_factor > 1 else 1
+            # ))
+
             x += torch.nn.functional.interpolate(
-                input[:, -self.n_class :, :, :],
+                input[:, -self.num_classes:, :, :],
                 scale_factor=sf,
                 mode='bicubic',
             )
@@ -444,6 +457,7 @@ class UNet(torch.nn.Module):
             for block in layer:
                 if hasattr(block, 'conv_adapter'):
                     block.reparametrize_convs()
+
 
 class SRUnet(torch.nn.Module):
     def __init__(

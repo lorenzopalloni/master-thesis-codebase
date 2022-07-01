@@ -16,12 +16,12 @@ def set_up_test_assets():
         )
 
 
-def do_test():
+def run_test():
     set_up_test_assets()
     subprocess.run('python -m pytest tests -vv'.split(' '))
 
 
-def do_coverage():
+def run_coverage():
     set_up_test_assets()
     subprocess.run('coverage run -m pytest tests'.split(' '))
     subprocess.run('coverage report -m'.split(' '))
@@ -29,7 +29,7 @@ def do_coverage():
 
 def main():
     parser = argparse.ArgumentParser(
-        prog='python do.py',
+        prog='python run.py',
         description='Run custom configurations.'
     )
     parser.add_argument(
@@ -42,11 +42,12 @@ def main():
     args = parser.parse_args()
 
     command_dict = {
-        'test': do_test,
-        'coverage': do_coverage,
+        'test': run_test,
+        'coverage': run_coverage,
     }
     command_dict[args.command]()
 
 
 if __name__ == '__main__':
     main()
+

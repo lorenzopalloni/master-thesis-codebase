@@ -3,14 +3,6 @@ data/
 tests/assets/encoded_frames/
 tests/assets/original_frames/
 tests/assets/encoded/
-comments.md
-
-notebooks/
-samples/
-literature/
-Artifact_Removal_GAN/
-fast-sr-unet/
-ERQA/
 
 ### Python.gitignore
 # Byte-compiled / optimized / DLL files
