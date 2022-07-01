@@ -3,6 +3,7 @@ data/
 tests/assets/encoded_frames/
 tests/assets/original_frames/
 tests/assets/encoded/
+outputs/
 
 ### Python.gitignore
 # Byte-compiled / optimized / DLL files
