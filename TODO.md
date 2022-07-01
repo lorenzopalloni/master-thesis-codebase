@@ -7,18 +7,18 @@ TODO List
 
 ## high priority
 
+- try to run training with unet (by vaccaro)
+- try to run training with sr-unet (by vaccaro)
+- implement your own unet/sr-unet
+
 - use ./binarization/models/ to store each architecture in a single file
-- choose an implementation for the unet
-- understand better the changes that has been done on the unet from Vaccaro
 - understand the details of the GAN framework in Vaccaro's repo and the
     differences with the No-GAN approach in Mameli's repo.
-- train and validate something
 
-- study and translate [...]/fast-sr-unet/models.py (UNet)
-
-- study and translate [...]/fast-sr-unet/train.py
 - study and translate [...]/fast-sr-unet/models.py (ConvolutionalBlock)
 - study and translate [...]/fast-sr-unet/models.py (Discriminator)
+- study and translate [...]/fast-sr-unet/models.py (UNet)
+- study and translate [...]/fast-sr-unet/train.py
 
 ---
 
