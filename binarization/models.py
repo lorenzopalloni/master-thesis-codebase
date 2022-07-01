@@ -300,7 +300,7 @@ class UNet(torch.nn.Module):
     def __init__(
         self,
         in_channels: int = 3,
-        num_classes: int = 3,
+        out_channels: int = 3,
         num_filters: int = 64,
         downsample: Optional[float] = None,
         use_residual: bool = True,
@@ -312,7 +312,7 @@ class UNet(torch.nn.Module):
         Args:
             in_channels (int, optional): Channel dimension of the input.
                 Defaults to 3.
-            num_classes (int, optional): Channel dimension of the output.
+            out_channels (int, optional): Channel dimension of the output.
                 Defaults to 3.
             num_filters (int, optional): Number of filters in the first hidden
                 layer. Each of the following layers gets twice the number of
@@ -334,7 +334,7 @@ class UNet(torch.nn.Module):
         super().__init__()
 
         self.use_residual = use_residual
-        self.num_classes = num_classes
+        self.out_channels = out_channels
         self.scale_factor = scale_factor
 
         self.dconv_down1 = layer_generator(
@@ -377,16 +377,18 @@ class UNet(torch.nn.Module):
             use_batch_norm=False,
         )
 
-        sf = self.scale_factor * (2 if self.use_s2d else 1)
+        # self.use_s2d was not defined in vaccaro/fast-sr-unet
+        sf = self.scale_factor  # * (2 if self.use_s2d else 1)  <- bug here
 
         self.to_rgb = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
-        if sf > 1:
-            self.conv_last = torch.nn.Conv2d(
-                num_filters, (sf**2) * num_classes, kernel_size=1, padding=0
-            )
-            self.pixel_shuffle = torch.nn.PixelShuffle(sf)
-        else:
-            self.conv_last = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
+        # if sf > 1:
+        #     self.conv_last = torch.nn.Conv2d(
+        #         num_filters, (sf**2) * out_channels, kernel_size=1, padding=0
+        #     )
+        #     self.pixel_shuffle = torch.nn.PixelShuffle(sf)
+        # else:
+        #     self.conv_last = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
+        self.conv_last = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
 
         if downsample is not None and downsample != 1.0:
             self.downsample = torch.nn.Upsample(
@@ -444,7 +446,7 @@ class UNet(torch.nn.Module):
             # ))
 
             x += torch.nn.functional.interpolate(
-                input[:, -self.num_classes:, :, :],
+                input[:, -self.out_channels:, :, :],
                 scale_factor=sf,
                 mode='bicubic',
             )

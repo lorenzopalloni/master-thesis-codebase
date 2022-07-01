@@ -23,11 +23,10 @@ TODO List
 ---
 
 ## medium priority
-- refactor CustomPyTorchDataset class
+- set up [Hydra Structured Config](https://hydra.cc/docs/advanced/terminology/#structured-config)
+- refactor CustomPyTorchDataset class:
     - rename it ?
     - use function composition
-- Hydra set-up
-
 - Professor suggests Comet.ml
 
 ---
@@ -47,4 +46,5 @@ TODO List
 - DONE - implement function composition
 - DONE - replace fire with argparse
 - DONE - fix tests/assets issue
+- DONE - init Hydra configuration
 

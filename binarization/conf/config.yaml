@@ -1,0 +1,27 @@
+params:
+    dis_lr: 1e-4
+    gen_lr: 1e-4
+    patch_size: 96
+    batch_size: 32
+    num_workers: 1  # {1, 12}
+    num_epochs: 2
+    w0: 1e-0  # LPIPS weight
+    w1: 1e-0  # SSIM weight
+    w2: 1e-3  # Adversarial loss weight
+    
+    unet:
+        num_filters: 64
+        downsample: None  # ??
+        use_residual: True  # ??
+        use_batch_norm: False  # ??
+        scale_factor: 2.0  # ??
+
+paths:
+    project_root_dir: ${hydra:runtime.cwd}
+    data_dir: "${paths.project_root_dir}/data"
+    train_dir: "${paths.data_dir}/train"
+    val_dir: "${paths.data_dir}/val"
+    test_dir: "${paths.data_dir}/test"
+    original_frames_dir: "${paths.train_dir}/original_frames_dir"
+    encoded_frames_dir: "${paths.train_dir}/encoded_frames_dir"
+
