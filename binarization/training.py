@@ -8,11 +8,6 @@ import tqdm
 import models
 import dataset
 
-
-###############################################################################
-# TODO: Hydra | classes
-###############################################################################
-
 # general hyperparameters
 dis_lr = 1e-4
 gen_lr = 1e-4
@@ -41,7 +36,6 @@ original_frames_dir = train_dir / 'original_frames_dir'
 encoded_frames_dir = train_dir / 'encoded_frames_dir'
 
 ###############################################################################
-
 gen = models.UNet(
     num_filters=num_filters,
     downsample=downsample,
@@ -64,6 +58,7 @@ lpips_vgg_loss_op.to(device)
 lpips_alex_loss_op.to(device)
 gen.to(device)
 dis.to(device)
+print(device)
 
 ds_train = dataset.CustomPyTorchDataset(
     original_frames_dir=original_frames_dir,

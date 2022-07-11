@@ -1,12 +1,13 @@
 TODO List
 ==========
 
+> remember to test with notebooks only in ~/Projects/test-binarization
 > remember to work on dev branch
 > remember to activate ~/.venv/binarization/bin/activate
-> remember to test with notebooks only in ~/Projects/test-binarization
 
 ## high priority
 
+- continue debugging on ../test-binarization/notebooks/testing-training.ipynb
 - try to run training with unet (by vaccaro)
 - try to run training with sr-unet (by vaccaro)
 - implement your own unet/sr-unet
@@ -28,6 +29,9 @@ TODO List
     - rename it ?
     - use function composition
 - Professor suggests Comet.ml
+- understand difference between vaccoro/pytorch\_ssim and piq.SSIMLoss,
+    especially why the latter doesn't handle input values < 0, while the
+    former can.
 
 ---
 

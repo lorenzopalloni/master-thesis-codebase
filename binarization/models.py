@@ -1,8 +1,11 @@
 import torch
+import torch.nn.functional as F
+from torch import nn
+
 from typing import Optional, Callable
 
 
-class Discriminator(torch.nn.Module):
+class Discriminator(nn.Module):
     """Discriminator model for a Super-Resolution GAN framework.
 
     References:
@@ -22,7 +25,7 @@ class Discriminator(torch.nn.Module):
 
         The first, third, fifth (and so on) convolutional blocks increase
         the number of channels but retain image size.
-        The second, fourht, sixth (and so on) convolutional blocks retain the
+        The second, fourth, sixth (and so on) convolutional blocks retain the
         same number of output channels, but halve image size.
         The first convolutional block is unique because it does not use batch
         normalization.
@@ -64,14 +67,14 @@ class Discriminator(torch.nn.Module):
                 )
             )
 
-        self.sequential = torch.nn.Sequential(
+        self.sequential = nn.Sequential(
             *conv_blocks,
-            torch.nn.AdaptiveAvgPool2d((6, 6)),
-            torch.nn.Flatten(),
-            torch.nn.Linear(all_out_channels[-1] * 6 * 6, fc_size),
-            torch.nn.LeakyReLU(0.2),
-            torch.nn.Linear(fc_size, 1),
-            torch.nn.Sigmoid(),
+            nn.AdaptiveAvgPool2d((6, 6)),
+            nn.Flatten(),
+            nn.Linear(all_out_channels[-1] * 6 * 6, fc_size),
+            nn.LeakyReLU(0.2),
+            nn.Linear(fc_size, 1),
+            nn.Sigmoid(),
         )
 
     @staticmethod
@@ -103,7 +106,7 @@ class Discriminator(torch.nn.Module):
         return self.sequential(inputs)
 
 
-class ConvBlock(torch.nn.Module):
+class ConvBlock(nn.Module):
     """A convolutional block, comprising convolutional, batch normalization,
     and activation layers.
     """
@@ -141,7 +144,7 @@ class ConvBlock(torch.nn.Module):
         layers = list()
 
         layers.append(
-            torch.nn.Conv2d(
+            nn.Conv2d(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 kernel_size=kernel_size,
@@ -157,16 +160,16 @@ class ConvBlock(torch.nn.Module):
         )
 
         if use_spectral_norm:
-            layers.append(torch.nn.utils.spectral_norm)
+            layers.append(nn.utils.spectral_norm)
 
         if use_batch_norm:
-            layers.append(torch.nn.BatchNorm2d(num_features=out_channels))
+            layers.append(nn.BatchNorm2d(num_features=out_channels))
 
         activation_op = self._activation_layer_helper(activation)
         if activation_op is not None:
             layers.append(activation_op)
 
-        self.sequential = torch.nn.Sequential(*layers)
+        self.sequential = nn.Sequential(*layers)
 
     @staticmethod
     def _activation_layer_helper(
@@ -178,11 +181,11 @@ class ConvBlock(torch.nn.Module):
             assert activation_name in available_activation_names
 
         if activation_name == 'prelu':
-            return torch.nn.PReLU()
+            return nn.PReLU()
         elif activation_name == 'leakyrelu':
-            return torch.nn.LeakyReLU(0.2)
+            return nn.LeakyReLU(0.2)
         elif activation_name == 'tanh':
-            return torch.nn.Tanh()
+            return nn.Tanh()
 
         return None
 
@@ -203,7 +206,7 @@ class ConvBlock(torch.nn.Module):
 # reference: https://github.com/usuyama/pytorch-unet
 
 
-class UNetBlock(torch.nn.Module):
+class UNetBlock(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -219,19 +222,19 @@ class UNetBlock(torch.nn.Module):
         self.use_residual = use_residual
         self.is_reparametrized = False
 
-        self.conv_adapter = torch.nn.Conv2d(
+        self.conv_adapter = nn.Conv2d(
             in_channels=in_channels, out_channels=out_channels,
             kernel_size=1, stride=1, padding=0
         )
-        self.conv1 = torch.nn.Conv2d(
+        self.conv1 = nn.Conv2d(
             in_channels=in_channels, out_channels=out_channels,
             kernel_size=kernel_size, stride=stride, padding=kernel_size // 2
         )
         self.bn = (
-            torch.nn.BatchNorm2d(num_features=out_channels)
-            if use_batch_norm else torch.nn.Identity()
+            nn.BatchNorm2d(num_features=out_channels)
+            if use_batch_norm else nn.Identity()
         )
-        self.act = torch.nn.ReLU(inplace=True)
+        self.act = nn.ReLU(inplace=True)
 
     def forward(self, input):
         x = self.conv1(input)
@@ -244,10 +247,10 @@ class UNetBlock(torch.nn.Module):
         return x
 
     def reparametrize_convs(self):
-        identity_conv = torch.nn.init.dirac_(
+        identity_conv = nn.init.dirac_(
             torch.empty_like(self.conv1.weight)
         )
-        padded_conv_adapter = torch.nn.functional.pad(
+        padded_conv_adapter = F.pad(
             input=self.conv_adapter.weight,
             pad=(1, 1, 1, 1),
             mode="constant",
@@ -272,40 +275,39 @@ def layer_generator(
     use_residual: bool = True,
     num_blocks: int = 2,
 ):
-    return torch.nn.Sequential(*(
+    return nn.Sequential(*(
         UNetBlock(
-            in_channels=in_channels,
+            in_channels=in_channels if block_id == 0 else out_channels,
             out_channels=out_channels,
             use_batch_norm=use_batch_norm,
             use_residual=use_residual,
-        ) for _ in range(int(num_blocks))
+        ) for block_id in range(int(num_blocks))
     ))
 
 
 def sr_espcn(n_filters, scale_factor=2, out_channels=3, kernel_size=1):
-    return torch.nn.Sequential(
+    return nn.Sequential(
         *(
-            torch.nn.Conv2d(
+            nn.Conv2d(
                 kernel_size=kernel_size,
                 in_channels=n_filters,
                 out_channels=(scale_factor**2) * out_channels,
                 padding=kernel_size // 2,
             ),
-            torch.nn.PixelShuffle(scale_factor),
+            nn.PixelShuffle(scale_factor),
         )
     )
 
 
-class UNet(torch.nn.Module):
+class UNet(nn.Module):
     def __init__(
         self,
         in_channels: int = 3,
         out_channels: int = 3,
         num_filters: int = 64,
-        downsample: Optional[float] = None,
         use_residual: bool = True,
         use_batch_norm: bool = False,
-        scale_factor: float = 2.0,
+        scale_factor: Optional[float] = 2.0
     ):
         """U-Net initializer.
 
@@ -319,17 +321,11 @@ class UNet(torch.nn.Module):
                 filters of its previous layer during encoding phase, and half
                 the number of filters of its previous layer during decoding
                 phase. Defaults to 64.
-            downsample (Optional[float], optional): Flag for downscaling the
-                output. For instance, with `downsample` == 0.5, the output
-                resolution will be half the original resolution of the input.
-                Defaults to None.
             use_residual (bool): Flag for residual scheme, that concatenates
                 the input to the final output. Defaults to True.
             use_batch_norm (bool): Flag for batch_normalization. Defaults to
                 False.
-            scale_factor (float): Rational upscaling factor (e.g., 720p to
-                1080p, with `scale_factor` == 1.5). It should be provided in
-                combination with `downsample` parameter. Defaults to 2.0.
+            scale_factor (float): Upscaling factor. Defaults to 2.
         """
         super().__init__()
 
@@ -358,8 +354,8 @@ class UNet(torch.nn.Module):
             use_batch_norm=use_batch_norm,
         )
 
-        self.maxpool = torch.nn.MaxPool2d(2)
-        self.upsample = torch.nn.Upsample(scale_factor=2, mode='bilinear')
+        self.maxpool = nn.MaxPool2d(2)
+        self.upsample = nn.Upsample(scale_factor=2.0, mode='bilinear')
 
         self.dconv_up3 = layer_generator(
             num_filters * 8 + num_filters * 4,
@@ -377,25 +373,28 @@ class UNet(torch.nn.Module):
             use_batch_norm=False,
         )
 
-        # self.use_s2d was not defined in vaccaro/fast-sr-unet
-        sf = self.scale_factor  # * (2 if self.use_s2d else 1)  <- bug here
+        self.to_rgb = nn.Conv2d(num_filters, 3, kernel_size=1)
 
-        self.to_rgb = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
-        # if sf > 1:
-        #     self.conv_last = torch.nn.Conv2d(
-        #         num_filters, (sf**2) * out_channels, kernel_size=1, padding=0
-        #     )
-        #     self.pixel_shuffle = torch.nn.PixelShuffle(sf)
-        # else:
-        #     self.conv_last = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
-        self.conv_last = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
-
-        if downsample is not None and downsample != 1.0:
-            self.downsample = torch.nn.Upsample(
-                scale_factor=downsample, mode='bicubic', align_corners=True
+        if self.scale_factor is not None:
+            self.conv_last = nn.Conv2d(
+                in_channels=num_filters,
+                out_channels=int((self.scale_factor ** 2) * out_channels),
+                kernel_size=1,
+                padding=0,
             )
+            self.pixel_shuffle = nn.PixelShuffle(int(self.scale_factor))
+
         else:
-            self.downsample = torch.nn.Identity()
+            self.conv_last = nn.Conv2d(
+                num_filters, out_channels, kernel_size=1
+            )
+            # self.downsample = nn.Upsample(
+            #     scale_factor=1 / self.scale_factor,
+            #     mode='bicubic',
+            #     align_corners=True
+            # )
+        # self.downsample = nn.Identity()
+
         self.layers = [
             self.dconv_down1,
             self.dconv_down2,
@@ -435,24 +434,18 @@ class UNet(torch.nn.Module):
 
         x = self.conv_last(x)
 
-        sf = self.scale_factor * (2 if self.use_s2d else 1)
-
-        if sf > 1:
+        if self.scale_factor is not None:
             x = self.pixel_shuffle(x)
-        if self.residual:
-            sf = self.scale_factor
-            # sf = (self.scale_factor // (
-            #   2 if self.use_s2d and self.scale_factor > 1 else 1
-            # ))
 
-            x += torch.nn.functional.interpolate(
+        if self.use_residual:
+            x += F.interpolate(
                 input[:, -self.out_channels:, :, :],
-                scale_factor=sf,
+                scale_factor=self.scale_factor,
                 mode='bicubic',
             )
-            x = torch.clamp(x, min=-1, max=1)
+            # x = torch.clamp(x, min=-1, max=1)
 
-        return torch.clamp(self.downsample(x), min=-1, max=1)
+        return torch.clamp(x, min=-1, max=1)
 
     def reparametrize(self):
         for layer in self.layers:
@@ -461,7 +454,7 @@ class UNet(torch.nn.Module):
                     block.reparametrize_convs()
 
 
-class SRUnet(torch.nn.Module):
+class SRUnet(nn.Module):
     def __init__(
         self,
         in_dim=3,
@@ -616,7 +609,7 @@ class SRUnet(torch.nn.Module):
             sf = (
                 self.scale_factor
             )  # (self.scale_factor // (2 if self.use_s2d and self.scale_factor > 1 else 1))
-            x += torch.nn.functional.interpolate(
+            x += nn.functional.interpolate(
                 input[:, -self.n_class :, :, :],
                 scale_factor=sf,
                 mode='bicubic',
@@ -634,7 +627,7 @@ class SRUnet(torch.nn.Module):
                     block.reparametrize_convs()
 
 
-class SimpleResNet(torch.nn.Module):
+class SimpleResNet(nn.Module):
     def __init__(self, n_filters, n_blocks):
         super(SimpleResNet, self).__init__()
         self.conv1 = UNetBlock(

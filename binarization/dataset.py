@@ -106,7 +106,7 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         patch_size: int = 96,  # not sure about this initial value
         training: bool = True,
         train_pct: float = 0.8,
-        upscaling_factor: float = 2.0,
+        scale_factor: float = 2.0,
     ):
         """Custom PyTorch Dataset loader for the training phase. Yield a pair
         (x, y), where x is the encoded version of the original image y.
@@ -122,9 +122,9 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
                 Defaults to 0.8. Random portion of the whole data used
                 for training. The remaining (1 - `train_pct`) of the data
                 will be used as validation.
-            upscaling_factor (float, optional):
-                Upscaling factor between original and encoded frames.
-                Defaults to 2, this means that original frames have a 2:1
+            scale_factor (float, optional):
+                Scale factor between original and encoded frames.
+                Defaults to 2.0, this means that original frames have a 2:1
                 resolution ratio compared to encoded frames.
         """
         self.patch_size = patch_size
@@ -146,7 +146,7 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
             self.num_examples, self.train_pct
         )
         self.val_size = self.num_examples - self.train_size
-        self.upscaling_factor = upscaling_factor
+        self.scale_factor = scale_factor
 
     def __len__(self):
         return self.train_size if self.training else self.val_size
@@ -161,11 +161,19 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
 
         a = get_starting_random_position(w, self.patch_size)
         b = get_starting_random_position(h, self.patch_size)
-        upscaling_factor = 2.0
-        hq_positions = (a, b, a + self.patch_size, b + self.patch_size)
-        lq_positions = tuple(map(lambda x: x * upscaling_factor, hq_positions))
-        hq = hq.crop(hq_positions)
+
+        lq_positions = (a, b, a + self.patch_size, b + self.patch_size)
         lq = lq.crop(lq_positions)
+
+        hq_positions = tuple(
+            map(lambda x: x * self.scale_factor, lq_positions)
+        )
+        hq = hq.crop(hq_positions)
+
+        # hq = hq.resize((
+        #     int(upscaling_factor * self.patch_size),
+        #     int(upscaling_factor * self.patch_size)
+        # ))
 
         if np.random.random() < 0.5:
             lq = torchvision.transforms.functional.hflip(lq)
