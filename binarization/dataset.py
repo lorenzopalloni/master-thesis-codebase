@@ -7,6 +7,7 @@ from typing import List, Tuple, Union
 
 import torch
 import torchvision
+import torchvision.transforms.functional as F
 import numpy as np
 
 
@@ -98,6 +99,14 @@ def list_all_files_in_all_second_level_directories(
     return res
 
 
+def min_max_scaler(x: torch.Tensor) -> torch.Tensor:
+    return x / 255.0
+
+
+def inv_min_max_scaler(x: torch.Tensor) -> torch.Tensor:
+    return (x * 255.0).int()
+
+
 class CustomPyTorchDataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -154,21 +163,21 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
     def __getitem__(self, i):
         i = index_handler(i, self.train_size, self.val_size, self.training)
 
-        hq = torchvision.utils.Image.open(self.original_filenames[i])
         lq = torchvision.utils.Image.open(self.encoded_filenames[i])
+        hq = torchvision.utils.Image.open(self.original_filenames[i])
 
+        # crop
+        ######################################################################
         w, h = lq.size
-
         a = get_starting_random_position(w, self.patch_size)
         b = get_starting_random_position(h, self.patch_size)
-
         lq_positions = (a, b, a + self.patch_size, b + self.patch_size)
         lq = lq.crop(lq_positions)
-
         hq_positions = tuple(
             map(lambda x: x * self.scale_factor, lq_positions)
         )
         hq = hq.crop(hq_positions)
+        ######################################################################
 
         # hq = hq.resize((
         #     int(upscaling_factor * self.patch_size),
@@ -176,14 +185,17 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         # ))
 
         if np.random.random() < 0.5:
-            lq = torchvision.transforms.functional.hflip(lq)
-            hq = torchvision.transforms.functional.hflip(hq)
+            lq = F.hflip(lq)
+            hq = F.hflip(hq)
 
-        custom_transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            lambda x: (x - 0.5) * 2.0,
-        ])
+        # custom_transform = torchvision.transforms.Compose([
+        #     torchvision.transforms.ToTensor(),
+        #     lambda x: (x - 0.5) * 2.0,
+        # ])
 
-        lq, hq = custom_transform(lq), custom_transform(hq)
+        # lq, hq = custom_transform(lq), custom_transform(hq)
 
-        return lq, hq
+        return (
+            min_max_scaler(F.pil_to_tensor(lq)),
+            min_max_scaler(F.pil_to_tensor(hq))
+        )

@@ -4,143 +4,156 @@ import torch
 import piq
 import lpips
 import tqdm
+import fire
 
-import models
-import dataset
+from binarization import models
+from binarization import dataset
 
-# general hyperparameters
-dis_lr = 1e-4
-gen_lr = 1e-4
-patch_size = 96
-batch_size = 32
-num_workers = 1  # {1, 12}
-num_epochs = 2
-w0 = 1e-0  # LPIPS weight
-w1 = 1e-0  # SSIM weight
-w2 = 1e-3  # Adversarial loss weight
 
-# unet hyperparameters
-num_filters = 64
-downsample = None  # ??
-use_residual = True  # ??
-use_batch_norm = False  # ??
-scale_factor = 2.0  # ??
+def main(project_root_dir: Path):
+    # general hyperparameters
+    dis_lr = 1e-4
+    gen_lr = 1e-4
+    patch_size = 96
+    batch_size = 32
+    num_workers = 1  # {1, 12}
+    num_epochs = 2
+    w0 = 1e-0  # LPIPS weight
+    w1 = 1e-0  # SSIM weight
+    w2 = 1e-3  # Adversarial loss weight
 
-# data configuration
-project_root_dir = Path(__file__).parent.parent
-data_dir = project_root_dir / 'data'
-train_dir = data_dir / 'train'
-val_dir = data_dir / 'val'
-test_dir = data_dir / 'test'
-original_frames_dir = train_dir / 'original_frames_dir'
-encoded_frames_dir = train_dir / 'encoded_frames_dir'
+    # unet hyperparameters
+    num_filters = 64
+    use_residual = True  # ??
+    use_batch_norm = False  # ??
+    scale_factor = 2.0  # ??
 
-###############################################################################
-gen = models.UNet(
-    num_filters=num_filters,
-    downsample=downsample,
-    use_residual=use_residual,
-    use_batch_norm=use_batch_norm,
-    scale_factor=scale_factor,
-)
-dis = models.Discriminator()
+    # data configuration
+    # project_root_dir = Path(__file__).parent.parent
+    data_dir = Path(project_root_dir) / 'data'
+    train_dir = data_dir / 'experimenting'  # 'train'
+    val_dir = data_dir / 'val'
+    test_dir = data_dir / 'test'
+    original_frames_dir = train_dir / 'original_frames'
+    encoded_frames_dir = train_dir / 'encoded_frames'
 
-dis_optim = torch.optim.Adam(lr=dis_lr, params=dis.parameters())
-gen_optim = torch.optim.Adam(lr=gen_lr, params=gen.parameters())
+    gen = models.UNet(
+        num_filters=num_filters,
+        use_residual=use_residual,
+        use_batch_norm=use_batch_norm,
+        scale_factor=scale_factor,
+    )
 
-ssim_loss_op = piq.SSIMLoss()
-lpips_vgg_loss_op = lpips.LPIPS(net='vgg', version='0.1')
-lpips_alex_loss_op = lpips.LPIPS(net='alex', version='0.1')
-bce_loss_op = torch.nn.BCELoss()
+    dis = models.Discriminator()
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-lpips_vgg_loss_op.to(device)
-lpips_alex_loss_op.to(device)
-gen.to(device)
-dis.to(device)
-print(device)
+    dis_optim = torch.optim.Adam(lr=dis_lr, params=dis.parameters())
+    gen_optim = torch.optim.Adam(lr=gen_lr, params=gen.parameters())
 
-ds_train = dataset.CustomPyTorchDataset(
-    original_frames_dir=original_frames_dir,
-    encoded_frames_dir=encoded_frames_dir,
-    patch_size=patch_size,
-    training=True,
-)
-ds_val = dataset.CustomPyTorchDataset(
-    original_frames_dir=original_frames_dir,
-    encoded_frames_dir=encoded_frames_dir,
-    patch_size=patch_size,
-    training=False,
-)
+    ssim_loss_op = piq.SSIMLoss()
+    lpips_vgg_loss_op = lpips.LPIPS(net='vgg', version='0.1')
+    lpips_alex_loss_op = lpips.LPIPS(net='alex', version='0.1')
+    bce_loss_op = torch.nn.BCELoss()
 
-dl_train = torch.utils.data.DataLoader(
-    dataset=ds_train,
-    batch_size=batch_size,
-    num_workers=num_workers,
-    shuffle=True,
-    pin_memory=True,
-)
-dl_val = torch.utils.data.DataLoader(
-    dataset=ds_val,
-    batch_size=batch_size,
-    num_workers=num_workers,
-    shuffle=True,
-    pin_memory=True,
-)
+    # move models and losses to cuda device if any is available
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    gen.to(device)
+    dis.to(device)
+    lpips_vgg_loss_op.to(device)
+    lpips_alex_loss_op.to(device)
+    print(f'current device: {device}')
 
-for epoch_id in range(num_epochs):
-    tqdm_ = tqdm.tqdm(dl_train)
-    for step, (x, y_true) in enumerate(tqdm_):
-        gen.train()
-        dis.train()
+    # define datasets and data loaders
+    ds_train = dataset.CustomPyTorchDataset(
+        original_frames_dir=original_frames_dir,
+        encoded_frames_dir=encoded_frames_dir,
+        patch_size=patch_size,
+        training=True,
+    )
+    ds_val = dataset.CustomPyTorchDataset(
+        original_frames_dir=original_frames_dir,
+        encoded_frames_dir=encoded_frames_dir,
+        patch_size=patch_size,
+        training=False,
+    )
 
-        dis_optim.zero_grad()
+    dl_train = torch.utils.data.DataLoader(
+        dataset=ds_train,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=True,
+        pin_memory=True,
+    )
+    dl_val = torch.utils.data.DataLoader(
+        dataset=ds_val,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=True,
+        pin_memory=True,
+    )
 
-        x = x.to(device)
-        y_true = y_true.to(device)
+    for epoch_id in range(num_epochs):
+        tqdm_ = tqdm.tqdm(dl_train)
+        for step, (lq, hq) in enumerate(tqdm_):
+            gen.train()
+            dis.train()
 
-        y_fake = gen(x)
+            # train discriminator phase
+            ##################################################################
+            dis_optim.zero_grad()
 
-        # train discriminator phase
-        batch_dim = x.shape[0]
-        y_pred_true = dis(y_true)
+            lq = lq.to(device)
+            hq = hq.to(device)
+            generated_hq = gen(lq).abs()
 
-        # TODO: handle name convention values vs functions
-        # e.g.: loss_dis / dis_loss, (value / function)
+            pred_hq = dis(hq)
 
-        # forward pass on true
-        loss_true = bce_loss_op(y_pred_true, torch.ones_like(y_pred_true))
+            loss_true = bce_loss_op(pred_hq, torch.ones_like(pred_hq))
 
-        # then updates on fakes
-        y_pred_fake = dis(y_fake.detach())
-        loss_fake = bce_loss_op(y_pred_fake, torch.zeros_like(y_pred_fake))
-
-        loss_dis = loss_true + loss_fake
-        loss_dis *= 0.5
-
-        loss_dis.backward()
-        dis_optim.step()
-
-        # train generator phase
-        gen_optim.zero_grad()
-
-        loss_lpips = lpips_vgg_loss_op(y_fake, y_true).mean()
-        loss_ssim = 1.0 - ssim_loss_op(y_fake, y_true)
-        y_pred_fake = dis(y_fake)
-        loss_bce = bce_loss_op(y_pred_fake, torch.ones_like(y_pred_fake))
-        loss_gen = w0 * loss_lpips + w1 * loss_ssim + w2 * loss_bce
-
-        loss_gen.backward()
-        gen_optim.step()
-
-        tqdm_.set_description(
-            'Loss dis: {:.6f}; '
-            'Loss gen: {:.6f}; '
-            'Loss gen (w0 * LPIPS + w1 * SSIM): {:.6f}'
-            'Loss gen (BCE only): {:.6f}'.format(
-                float(loss_dis),
-                float(loss_gen),
-                float(w0 * loss_lpips + w1 * loss_ssim + w2),
-                float(loss_bce),
+            pred_generated_hq = dis(generated_hq.detach())
+            loss_fake = bce_loss_op(
+                pred_generated_hq,
+                torch.zeros_like(pred_generated_hq)
             )
-        )
+
+            loss_dis = loss_true + loss_fake
+            loss_dis *= 0.5
+
+            loss_dis.backward()
+            dis_optim.step()
+            ##################################################################
+
+            # train generator phase
+            ##################################################################
+            gen_optim.zero_grad()
+
+            loss_lpips = lpips_vgg_loss_op(generated_hq, hq).mean()
+            loss_ssim = 1.0 - ssim_loss_op(generated_hq, hq)
+            pred_generated_hq = dis(generated_hq)
+            loss_bce = bce_loss_op(
+                pred_generated_hq,
+                torch.ones_like(pred_generated_hq)
+            )
+            loss_gen = w0 * loss_lpips + w1 * loss_ssim + w2 * loss_bce
+
+            loss_gen.backward()
+            gen_optim.step()
+            ##################################################################
+
+            # training log
+            ##################################################################
+            tqdm_.set_description(
+                'Loss dis: {:.6f}; '
+                'Loss gen: {:.6f}; '
+                'Loss gen (w0 * LPIPS + w1 * SSIM): {:.6f}'
+                'Loss gen (BCE only): {:.6f}'.format(
+                    float(loss_dis),
+                    float(loss_gen),
+                    float(w0 * loss_lpips + w1 * loss_ssim + w2),
+                    float(loss_bce),
+                )
+            )
+            ##################################################################
+
+
+if __name__ == "__main__":
+    fire.Fire(main)

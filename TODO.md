@@ -5,6 +5,11 @@ TODO List
 > remember to work on dev branch
 > remember to activate ~/.venv/binarization/bin/activate
 
+> next checkpoint:
+    - discuss about SSIM that cannot take negative values as inputs
+    - Vaccaro uses a normalization that does not account for this issue
+    - I used a min-max scaler and abs function over the generated image
+
 ## high priority
 
 - continue debugging on ../test-binarization/notebooks/testing-training.ipynb
