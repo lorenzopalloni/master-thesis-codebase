@@ -12,6 +12,7 @@ TODO List
 
 ## high priority
 
+- as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
 - continue debugging on ../test-binarization/notebooks/testing-training.ipynb
 - try to run training with unet (by vaccaro)
 - try to run training with sr-unet (by vaccaro)

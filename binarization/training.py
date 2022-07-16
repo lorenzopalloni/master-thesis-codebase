@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime
 
 import torch
 import piq
@@ -15,27 +16,30 @@ def main(project_root_dir: Path):
     dis_lr = 1e-4
     gen_lr = 1e-4
     patch_size = 96
-    batch_size = 32
+    batch_size = 8
     num_workers = 1  # {1, 12}
-    num_epochs = 2
+    num_epochs = 20
     w0 = 1e-0  # LPIPS weight
     w1 = 1e-0  # SSIM weight
     w2 = 1e-3  # Adversarial loss weight
 
     # unet hyperparameters
     num_filters = 64
-    use_residual = True  # ??
-    use_batch_norm = False  # ??
-    scale_factor = 2.0  # ??
+    use_residual = True
+    use_batch_norm = False
+    scale_factor = 2.0
 
     # data configuration
     # project_root_dir = Path(__file__).parent.parent
-    data_dir = Path(project_root_dir) / 'data'
+    project_root_dir = Path(project_root_dir)
+    data_dir = project_root_dir / 'data'
     train_dir = data_dir / 'experimenting'  # 'train'
     val_dir = data_dir / 'val'
     test_dir = data_dir / 'test'
     original_frames_dir = train_dir / 'original_frames'
     encoded_frames_dir = train_dir / 'encoded_frames'
+    checkpoints_dir = project_root_dir / 'checkpoints'
+    checkpoints_dir.mkdir(exist_ok=True)
 
     gen = models.UNet(
         num_filters=num_filters,
@@ -97,13 +101,13 @@ def main(project_root_dir: Path):
             gen.train()
             dis.train()
 
-            # train discriminator phase
+            # discriminator training step
             ##################################################################
             dis_optim.zero_grad()
 
             lq = lq.to(device)
             hq = hq.to(device)
-            generated_hq = gen(lq).abs()
+            generated_hq = gen(lq)
 
             pred_hq = dis(hq)
 
@@ -122,12 +126,19 @@ def main(project_root_dir: Path):
             dis_optim.step()
             ##################################################################
 
-            # train generator phase
+            # generator training step
             ##################################################################
             gen_optim.zero_grad()
 
             loss_lpips = lpips_vgg_loss_op(generated_hq, hq).mean()
-            loss_ssim = 1.0 - ssim_loss_op(generated_hq, hq)
+
+            x_min = min(generated_hq.min(), hq.min())
+            x_max = max(generated_hq.max(), hq.max())
+            loss_ssim = 1.0 - ssim_loss_op(
+                dataset.min_max_scaler(generated_hq, x_min, x_max),
+                dataset.min_max_scaler(hq, x_min, x_max)
+            )
+            
             pred_generated_hq = dis(generated_hq)
             loss_bce = bce_loss_op(
                 pred_generated_hq,
@@ -139,20 +150,25 @@ def main(project_root_dir: Path):
             gen_optim.step()
             ##################################################################
 
-            # training log
+            # logging statistics on training set
             ##################################################################
             tqdm_.set_description(
+                'Epoch #{} - '
                 'Loss dis: {:.6f}; '
-                'Loss gen: {:.6f}; '
-                'Loss gen (w0 * LPIPS + w1 * SSIM): {:.6f}'
-                'Loss gen (BCE only): {:.6f}'.format(
+                'Loss gen: {:.6f} = '
+                '({:.6f} + {:.4f} * {:.6f})'.format(
+                    epoch_id,
                     float(loss_dis),
                     float(loss_gen),
-                    float(w0 * loss_lpips + w1 * loss_ssim + w2),
+                    float(w0 * loss_lpips + w1 * loss_ssim),
+                    float(w2),
                     float(loss_bce),
                 )
             )
             ##################################################################
+        
+    str_now = datetime.now().strftime(r"%Y%m%d%H%M%S")
+    torch.save(gen.state_dict(), checkpoints_dir / f"{str_now}.pth")
 
 
 if __name__ == "__main__":

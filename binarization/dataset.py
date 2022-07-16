@@ -99,12 +99,16 @@ def list_all_files_in_all_second_level_directories(
     return res
 
 
-def min_max_scaler(x: torch.Tensor) -> torch.Tensor:
-    return x / 255.0
+def min_max_scaler(
+    x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0
+) -> torch.Tensor:
+    return (x - x_min) / (x_max - x_min)
 
 
-def inv_min_max_scaler(x: torch.Tensor) -> torch.Tensor:
-    return (x * 255.0).int()
+def inv_min_max_scaler(
+    x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0
+) -> torch.Tensor:
+    return (x * (x_max - x_min) + x_min).int()
 
 
 class CustomPyTorchDataset(torch.utils.data.Dataset):

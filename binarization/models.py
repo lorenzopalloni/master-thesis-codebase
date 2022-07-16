@@ -325,7 +325,7 @@ class UNet(nn.Module):
                 the input to the final output. Defaults to True.
             use_batch_norm (bool): Flag for batch_normalization. Defaults to
                 False.
-            scale_factor (float): Upscaling factor. Defaults to 2.
+            scale_factor (float): Upscaling factor. Defaults to 2.0.
         """
         super().__init__()
 
