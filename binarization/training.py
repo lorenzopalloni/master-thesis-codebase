@@ -11,7 +11,7 @@ from binarization import models
 from binarization import dataset
 
 
-def main(project_root_dir: Path):
+def main(project_dir: Path):
     # general hyperparameters
     dis_lr = 1e-4
     gen_lr = 1e-4
@@ -30,15 +30,15 @@ def main(project_root_dir: Path):
     scale_factor = 2.0
 
     # data configuration
-    # project_root_dir = Path(__file__).parent.parent
-    project_root_dir = Path(project_root_dir)
-    data_dir = project_root_dir / 'data'
-    train_dir = data_dir / 'experimenting'  # 'train'
-    val_dir = data_dir / 'val'
-    test_dir = data_dir / 'test'
-    original_frames_dir = train_dir / 'original_frames'
-    encoded_frames_dir = train_dir / 'encoded_frames'
-    checkpoints_dir = project_root_dir / 'checkpoints'
+    # project_dir = Path(__file__).parent.parent
+    project_dir = Path(project_dir)
+    data_dir = project_dir / 'data'
+    train_dir = data_dir / 'train'
+    # val_dir = data_dir / 'val'
+    # test_dir = data_dir / 'test'
+    train_original_frames_dir = train_dir / 'original_frames'
+    train_encoded_frames_dir = train_dir / 'encoded_frames'
+    checkpoints_dir = project_dir / 'checkpoints'
     checkpoints_dir.mkdir(exist_ok=True)
 
     gen = models.UNet(
@@ -68,17 +68,17 @@ def main(project_root_dir: Path):
 
     # define datasets and data loaders
     ds_train = dataset.CustomPyTorchDataset(
-        original_frames_dir=original_frames_dir,
-        encoded_frames_dir=encoded_frames_dir,
+        original_frames_dir=train_original_frames_dir,
+        encoded_frames_dir=train_encoded_frames_dir,
         patch_size=patch_size,
         training=True,
     )
-    ds_val = dataset.CustomPyTorchDataset(
-        original_frames_dir=original_frames_dir,
-        encoded_frames_dir=encoded_frames_dir,
-        patch_size=patch_size,
-        training=False,
-    )
+    # ds_val = dataset.CustomPyTorchDataset(
+    #     original_frames_dir=val_original_frames_dir,
+    #     encoded_frames_dir=val_encoded_frames_dir,
+    #     patch_size=patch_size,
+    #     training=False,
+    # )
 
     dl_train = torch.utils.data.DataLoader(
         dataset=ds_train,
@@ -87,13 +87,13 @@ def main(project_root_dir: Path):
         shuffle=True,
         pin_memory=True,
     )
-    dl_val = torch.utils.data.DataLoader(
-        dataset=ds_val,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        shuffle=True,
-        pin_memory=True,
-    )
+    # dl_val = torch.utils.data.DataLoader(
+    #     dataset=ds_val,
+    #     batch_size=batch_size,
+    #     num_workers=num_workers,
+    #     shuffle=True,
+    #     pin_memory=True,
+    # )
 
     for epoch_id in range(num_epochs):
         tqdm_ = tqdm.tqdm(dl_train)
@@ -154,9 +154,9 @@ def main(project_root_dir: Path):
             ##################################################################
             tqdm_.set_description(
                 'Epoch #{} - '
-                'Loss dis: {:.6f}; '
-                'Loss gen: {:.6f} = '
-                '({:.6f} + {:.4f} * {:.6f})'.format(
+                'Loss dis: {:.8f}; '
+                'Loss gen: {:.4f} = '
+                '({:.4f} + {:.4f} * {:.4f})'.format(
                     epoch_id,
                     float(loss_dis),
                     float(loss_gen),

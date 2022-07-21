@@ -4,6 +4,8 @@ tests/assets/encoded_frames/
 tests/assets/original_frames/
 tests/assets/encoded/
 outputs/
+checkpoints/
+**/*/*.ipynb
 
 ### Python.gitignore
 # Byte-compiled / optimized / DLL files

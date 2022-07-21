@@ -6,12 +6,14 @@ TODO List
 > remember to activate ~/.venv/binarization/bin/activate
 
 > next checkpoint:
-    - discuss about SSIM that cannot take negative values as inputs
-    - Vaccaro uses a normalization that does not account for this issue
-    - I used a min-max scaler and abs function over the generated image
+    - show result after 20 epochs on ./experiments/2022\_07\_20.ipynb
+
+> [Derf's collection data](https://media.xiph.org/video/derf/) (*)
+
 
 ## high priority
 
+- copy-paste the content of ./experiments/2022_07_20.ipynb in a Python script
 - as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
 - continue debugging on ../test-binarization/notebooks/testing-training.ipynb
 - try to run training with unet (by vaccaro)
@@ -46,6 +48,24 @@ TODO List
     original implementation
 
 ---
+
+(*) Videos from Derf's collection used by Vaccaro in his paper as extra test:
++ -> downloaded
+- -> not yet downloaded
+    + Ducks take-off
+    + Crowd run
+    - Controlled burn
+    - Aspen
+    - Snow mountain
+    - Touchdown pass
+    - Station 2
+    - Rush hour
+    - Blue sky
+    - Riverbed
+    - Old town cross
+    - Rush field
+    - Into tree
+    - Sun flower
 
 #### DONEs
 - DONE - .gitignore literature/ folder, plus Python and LaTex stuff
