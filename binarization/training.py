@@ -96,8 +96,8 @@ def main(project_dir: Path):
     # )
 
     for epoch_id in range(num_epochs):
-        tqdm_ = tqdm.tqdm(dl_train)
-        for step, (lq, hq) in enumerate(tqdm_):
+        progress_bar = tqdm.tqdm(dl_train)
+        for step_id, (lq, hq) in enumerate(progress_bar):
             gen.train()
             dis.train()
 
@@ -152,7 +152,7 @@ def main(project_dir: Path):
 
             # logging statistics on training set
             ##################################################################
-            tqdm_.set_description(
+            progress_bar.set_description(
                 'Epoch #{} - '
                 'Loss dis: {:.8f}; '
                 'Loss gen: {:.4f} = '

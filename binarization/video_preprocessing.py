@@ -9,6 +9,7 @@ def compress(
     input_fn: Union[Path, str],
     output_fn: Union[Path, str],
     crf: int = 23,
+    scale_factor: int = 2,
 ):
     """Compress a video.
 
@@ -24,9 +25,9 @@ def compress(
         '-c:v',  # codec video
         'libx265',  # H.265/HEVC
         '-crf',  # constant rate factor
-        f'{crf}',  # the default is 28
+        f'{crf}',  # defaults to 23
         '-preset',  # faster -> less quality, slower -> better quality
-        'medium',  # the default is medium
+        'medium',  # defaults to medium
         '-c:a',  # codec audio
         'aac',  # AAC audio format
         '-b:a',  # bitrate audio
@@ -34,8 +35,14 @@ def compress(
         '-movflags',  # weird option
         'faststart',
         '-vf',  # video filters
-        'scale=iw/2:ih/2,format=yuv420p',  # scaling 1/2, formatting yuv420p
-        # 'scale=-2:540,format=yuv420p',  # from compress_test_videos.sh
+        (
+            f'scale=iw/{scale_factor}:ih/{scale_factor}'  # downscale, defaults to half
+            ',format=yuv420p'  # output format, defaults to yuv420p
+        ),
+        # (
+        #     f'scale=-{scale_factor}:iw'  # downscale, defaults to half
+        #     ',format=yuv420p'  # output format, defaults to yuv420p
+        # ),
         f'{output_fn}',
     ]
     subprocess.run(cmd)
@@ -63,7 +70,7 @@ def video_to_frames(
         # '-vsync', '0',  # should avoid drops or duplications
         '-q:v',
         '1',
-        f'{ output_dir / input_fn.stem }_%4d.jpg',
+        f'{ (Path(output_dir) / Path(input_fn).stem).as_posix() }_%4d.jpg',
     ]
     subprocess.run(cmd)
 
@@ -137,6 +144,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input_dir', type=str, default='.')
+    parser.add_argument('-s', '--scale_factor', type=int, default=2)
     args = parser.parse_args()
     input_dir = Path(args.input_dir)
 
@@ -149,18 +157,19 @@ def main():
 
     for original_fn in original_dir.iterdir():
         encoded_fn = encoded_dir / ('encoded_' + original_fn.stem + '.mp4')
-        compress(input_fn=original_fn, output_fn=encoded_fn)
 
-        (
-            original_frames_subdir := original_frames_dir / original_fn.stem
-        ).mkdir(exist_ok=True)
-        (encoded_frames_subdir := encoded_frames_dir / encoded_fn.stem).mkdir(
-            exist_ok=True
+        compress(
+            input_fn=original_fn,
+            output_fn=encoded_fn,
+            scale_factor=args.scale_factor
         )
 
-        video_to_frames(
-            input_fn=original_fn, output_dir=original_frames_subdir
-        )
+        original_frames_subdir = original_frames_dir / original_fn.stem
+        original_frames_subdir.mkdir(exist_ok=True)
+        encoded_frames_subdir = encoded_frames_dir / encoded_fn.stem
+        encoded_frames_subdir.mkdir(exist_ok=True)
+
+        video_to_frames(input_fn=original_fn, output_dir=original_frames_subdir)
         video_to_frames(input_fn=encoded_fn, output_dir=encoded_frames_subdir)
 
 
