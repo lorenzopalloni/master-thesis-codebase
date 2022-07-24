@@ -17,7 +17,7 @@ def main(project_dir: Path):
     gen_lr = 1e-4
     patch_size = 96
     batch_size = 8
-    num_workers = 1  # {1, 12}
+    num_workers = 8  # {1, 12}
     num_epochs = 20
     w0 = 1e-0  # LPIPS weight
     w1 = 1e-0  # SSIM weight
@@ -27,7 +27,7 @@ def main(project_dir: Path):
     num_filters = 64
     use_residual = True
     use_batch_norm = False
-    scale_factor = 2.0
+    scale_factor: int = 4
 
     # data configuration
     # project_dir = Path(__file__).parent.parent
@@ -167,8 +167,8 @@ def main(project_dir: Path):
             )
             ##################################################################
         
-    str_now = datetime.now().strftime(r"%Y%m%d%H%M%S")
-    torch.save(gen.state_dict(), checkpoints_dir / f"{str_now}.pth")
+        str_now = datetime.now().strftime(r"%Y%m%d%H%M%S")
+        torch.save(gen.state_dict(), checkpoints_dir / f"{str_now}.pth")
 
 
 if __name__ == "__main__":

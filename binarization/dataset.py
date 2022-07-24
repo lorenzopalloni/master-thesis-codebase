@@ -119,7 +119,7 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         patch_size: int = 96,  # not sure about this initial value
         training: bool = True,
         train_pct: float = 0.8,
-        scale_factor: float = 2.0,
+        scale_factor: int = 4,
     ):
         """Custom PyTorch Dataset loader for the training phase. Yield a pair
         (x, y), where x is the encoded version of the original image y.
@@ -135,9 +135,9 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
                 Defaults to 0.8. Random portion of the whole data used
                 for training. The remaining (1 - `train_pct`) of the data
                 will be used as validation.
-            scale_factor (float, optional):
+            scale_factor (Optional[int]):
                 Scale factor between original and encoded frames.
-                Defaults to 2.0, this means that original frames have a 2:1
+                Defaults to 4, this means that original frames have a 4:1
                 resolution ratio compared to encoded frames.
         """
         self.patch_size = patch_size

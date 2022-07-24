@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 
 
 class Discriminator(nn.Module):
@@ -141,7 +141,7 @@ class ConvBlock(nn.Module):
         """
         super().__init__()
 
-        layers = list()
+        layers: List[torch.nn.Module] = list()
 
         layers.append(
             nn.Conv2d(
@@ -307,7 +307,7 @@ class UNet(nn.Module):
         num_filters: int = 64,
         use_residual: bool = True,
         use_batch_norm: bool = False,
-        scale_factor: Optional[float] = 2.0
+        scale_factor: Optional[int] = 2
     ):
         """U-Net initializer.
 
@@ -325,7 +325,7 @@ class UNet(nn.Module):
                 the input to the final output. Defaults to True.
             use_batch_norm (bool): Flag for batch_normalization. Defaults to
                 False.
-            scale_factor (float): Upscaling factor. Defaults to 2.0.
+            scale_factor (Optional[int]): Scaling factor. Defaults to 2.
         """
         super().__init__()
 
@@ -378,11 +378,11 @@ class UNet(nn.Module):
         if self.scale_factor is not None:
             self.conv_last = nn.Conv2d(
                 in_channels=num_filters,
-                out_channels=int((self.scale_factor ** 2) * out_channels),
+                out_channels=(self.scale_factor ** 2) * out_channels,
                 kernel_size=1,
                 padding=0,
             )
-            self.pixel_shuffle = nn.PixelShuffle(int(self.scale_factor))
+            self.pixel_shuffle = nn.PixelShuffle(self.scale_factor)
 
         else:
             self.conv_last = nn.Conv2d(
@@ -440,10 +440,9 @@ class UNet(nn.Module):
         if self.use_residual:
             x += F.interpolate(
                 input[:, -self.out_channels:, :, :],
-                scale_factor=self.scale_factor,
+                scale_factor=float(self.scale_factor),
                 mode='bicubic',
             )
-            # x = torch.clamp(x, min=-1, max=1)
 
         return torch.clamp(x, min=-1, max=1)
 
