@@ -3,8 +3,9 @@ data/
 tests/assets/encoded_frames/
 tests/assets/original_frames/
 tests/assets/encoded/
-outputs/
+artifacts/
 checkpoints/
+outputs/
 **/*/*.ipynb
 
 ### Python.gitignore

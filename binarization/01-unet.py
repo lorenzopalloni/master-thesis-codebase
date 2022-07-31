@@ -1,5 +1,3 @@
-""" Parts of the U-Net model """
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -75,10 +73,6 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
-
-""" Full assembly of the parts to form the complete network """
-
-from .unet_parts import *
 
 
 class UNet(nn.Module):

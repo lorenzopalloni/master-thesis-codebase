@@ -1,37 +1,36 @@
 TODO List
 ==========
 
+> continue on ./binarization/future\_training.py
 > remember to work on dev branch
-> remember to test with notebooks only in ~/Projects/test-binarization (?)
 
 > next checkpoint:
-    - show result after 20 epochs on ./experiments/2022\_07\_20.ipynb
+    - ??
 
 ## high priority
-
-- do some experimentation with the SR-UNet
-- copy-paste the content of ./experiments/2022_07_20.ipynb in a Python script
+- A/B test with previous ssim loss
+- check structural reparametrization in DiracNets and RepVGG
+- check at line 88 in vaccaro/pytorch\_unet.py dimensions of self.conv\_adapter.weight
+- implement SR-UNet
 - as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
+    - (the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences)
+    - (this other one instead contains 772 sequences, and it is 83.8GB big)
 - try to run training with sr-unet (by vaccaro)
 
 - understand the details of the GAN framework in Vaccaro's repo and the
     differences with the No-GAN approach in Mameli's repo.
 
-- study and translate [...]/fast-sr-unet/models.py (ConvolutionalBlock)
-- study and translate [...]/fast-sr-unet/models.py (Discriminator)
-- study and translate [...]/fast-sr-unet/models.py (UNet)
-- study and translate [...]/fast-sr-unet/train.py
-
 ---
 
 ## medium priority
+- replace scaling 540 -> 512 (270 -> 256), with black bands
 - set up [Hydra Structured Config](https://hydra.cc/docs/advanced/terminology/#structured-config)
 - use ./binarization/models/ to store each architecture in a single file
 - refactor CustomPyTorchDataset class:
     - rename it ?
     - use function composition
     - extract a transform function removing all internal preprocessing
-- Professor suggests Comet.ml
+- the Professor suggests Comet.ml, but I'll check mlflow since I'm using it at work
 
 ---
 
@@ -76,4 +75,5 @@ by Vaccaro in his paper as an extra test dataset:
     especially why the latter doesn't handle input values < 0, while the
     former can.
 - DONE - do some experimentation with the UNet
+- DONE - study SR-UNet
 

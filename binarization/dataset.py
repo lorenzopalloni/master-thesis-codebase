@@ -9,6 +9,7 @@ import torch
 import torchvision
 import torchvision.transforms.functional as F
 import numpy as np
+from omegaconf import DictConfig
 
 
 def compose(*functions):
@@ -52,7 +53,7 @@ def lists_have_same_elements(a: List, b: List) -> bool:
 
 
 def list_files(
-    path: Union[Path, str], extension: str = '.jpg', sort_result: bool = True
+    path: Path, extension: str = '.jpg', sort_result: bool = True
 ) -> List[Path]:
     """List files in a given directory with the same extension.
 
@@ -68,9 +69,7 @@ def list_files(
     return res
 
 
-def list_directories(
-    path: Union[Path, str], sort_result: bool = True
-) -> List[Path]:
+def list_directories(path: Path, sort_result: bool = True) -> List[Path]:
     """List all the directories in a given path.
 
     By default the result is provided in lexicographic order.
@@ -82,7 +81,7 @@ def list_directories(
 
 
 def list_all_files_in_all_second_level_directories(
-    path: Union[Path, str], extension: str = '.jpg', sort_result: bool = True
+    path: Path, extension: str = '.jpg', sort_result: bool = True
 ) -> List[Path]:
     """List all files in the second level directories of the given path.
 
@@ -96,7 +95,7 @@ def list_all_files_in_all_second_level_directories(
     )
     if sort_result:
         return sorted(res)
-    return res
+    return list(res)
 
 
 def min_max_scaler(
@@ -146,12 +145,12 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
 
         self.original_filenames = (
             list_all_files_in_all_second_level_directories(
-                original_frames_dir
+                Path(original_frames_dir)
             )
         )
         self.encoded_filenames = (
             list_all_files_in_all_second_level_directories(
-                encoded_frames_dir
+                Path(encoded_frames_dir)
             )
         )
         self.num_examples = len(self.original_filenames)
@@ -201,5 +200,53 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
 
         return (
             min_max_scaler(F.pil_to_tensor(lq)),
-            min_max_scaler(F.pil_to_tensor(hq))
+            min_max_scaler(F.pil_to_tensor(hq)),
         )
+
+
+def make_train_dataloader(cfg: DictConfig):
+    dataset = CustomPyTorchDataset(
+        original_frames_dir=Path(cfg.paths.train_original_frames_dir),
+        encoded_frames_dir=Path(cfg.paths.train_encoded_frames_dir),
+        patch_size=cfg.params.patch_size,
+        training=True,
+    )
+    return torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
+        shuffle=True,
+        pin_memory=True,
+    )
+
+
+def make_val_dataloader(cfg: DictConfig):
+    dataset = CustomPyTorchDataset(
+        original_frames_dir=Path(cfg.paths.val_original_frames_dir),
+        encoded_frames_dir=Path(cfg.paths.val_encoded_frames_dir),
+        patch_size=cfg.params.patch_size,
+        training=False,
+    )
+    return torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
+        shuffle=False,
+        pin_memory=True,
+    )
+
+
+def make_test_dataloader(cfg: DictConfig):
+    dataset = CustomPyTorchDataset(
+        original_frames_dir=Path(cfg.paths.test_original_frames_dir),
+        encoded_frames_dir=Path(cfg.paths.test_encoded_frames_dir),
+        patch_size=cfg.params.patch_size,
+        training=False,
+    )
+    return torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
+        shuffle=False,
+        pin_memory=True,
+    )

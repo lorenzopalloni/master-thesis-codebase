@@ -122,7 +122,6 @@ if __name__ == '__main__':
 
             ## train generator phase
             gan_opt.zero_grad()
-
             lpips_loss_ = lpips_loss(y_fake, y_true).mean()
             ssim_loss = 1.0 - ssim(y_fake, y_true)
             pred_fake = critic(y_fake)

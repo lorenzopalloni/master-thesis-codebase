@@ -216,7 +216,7 @@ class UNetBlock(nn.Module):
         kernel_size: int = 3,
         use_residual: bool = True,
     ):
-        super(UNetBlock, self).__init__()
+        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.use_residual = use_residual
@@ -439,7 +439,7 @@ class UNet(nn.Module):
 
         if self.use_residual:
             x += F.interpolate(
-                input[:, -self.out_channels:, :, :],
+                input[:, -self.out_channels:, :, :],  # RGB -> BGR
                 scale_factor=float(self.scale_factor),
                 mode='bicubic',
             )

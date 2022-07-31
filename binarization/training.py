@@ -6,6 +6,7 @@ import piq
 import lpips
 import tqdm
 import fire
+from torch.utils.tensorboard import SummaryWriter
 
 from binarization import models
 from binarization import dataset
