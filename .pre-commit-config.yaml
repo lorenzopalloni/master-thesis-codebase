@@ -1,0 +1,61 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-added-large-files
+-   repo: https://github.com/psf/black
+    rev: 22.6.0
+    hooks:
+    -   id: black
+        args: [--config=./pyproject.toml]
+-   repo: https://github.com/pycqa/isort
+    rev: 5.10.1
+    hooks:
+    -   id: isort
+        args: ["--profile", "black"]
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.971
+    hooks:
+    -   id: mypy
+        exclude: vaccaro/
+        args: [--ignore-missing-imports,]
+-   repo: https://github.com/PyCQA/pylint
+    rev: v2.14.5
+    hooks:
+    -   id: pylint
+        exclude: "vaccaro/"
+        args: [
+            "--disable=
+            missing-function-docstring,
+            missing-class-docstring,
+            missing-module-docstring,
+            too-few-public-methods,
+            too-many-arguments,
+            too-many-instance-attributes,
+            too-many-locals,
+            too-many-statements,
+            simplifiable-if-expression,
+            line-too-long,
+            subprocess-run-check,
+            no-value-for-parameter,
+            consider-using-f-string,
+            consider-using-from-import,
+            use-list-literal,
+            super-with-arguments,
+            fixme,
+            no-else-return,
+            protected-access,
+            import-error,
+            unused-import,
+            unused-variable,
+            invalid-name,
+            duplicate-code,
+            no-member,
+            unexpected-keyword-arg,
+            redefined-builtin,",
+        ]
