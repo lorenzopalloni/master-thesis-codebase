@@ -1,30 +1,36 @@
 TODO List
 ==========
 
-> continue on ./binarization/future\_training.py
+> resume from the last notebook
+> resume from ./binarization/future\_training.py
 > remember to work on dev branch
 
 > next checkpoint:
     - ??
 
 ## high priority
-- A/B test with previous ssim loss
-- check structural reparametrization in DiracNets and RepVGG
-- check at line 88 in vaccaro/pytorch\_unet.py dimensions of self.conv\_adapter.weight
-- implement SR-UNet
-- as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
-    - (the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences)
-    - (this other one instead contains 772 sequences, and it is 83.8GB big)
-- try to run training with sr-unet (by vaccaro)
 
-- understand the details of the GAN framework in Vaccaro's repo and the
-    differences with the No-GAN approach in Mameli's repo.
+- I've recently changed dataset.CustomPyTorchDataset.index\_handler behaviour:
+    - you should update its related tests
+
+
+- log more info while training
+- A/B test with previous ssim loss
+
+- check structural reparametrization in DiracNets and RepVGG
+
 
 ---
 
 ## medium priority
-- replace scaling 540 -> 512 (270 -> 256), with black bands
-- set up [Hydra Structured Config](https://hydra.cc/docs/advanced/terminology/#structured-config)
+- resume from logging validation images original vs. generated
+- check at line 88 in vaccaro/pytorch\_unet.py dimensions of self.conv\_adapter.weight
+
+- as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
+    - (the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences)
+    - (this other one instead contains 772 sequences, and it is 83.8GB big)
+
+- replace the scaling 540 -> 512 (or 270 -> 256), with black bands
 - use ./binarization/models/ to store each architecture in a single file
 - refactor CustomPyTorchDataset class:
     - rename it ?
@@ -76,4 +82,4 @@ by Vaccaro in his paper as an extra test dataset:
     former can.
 - DONE - do some experimentation with the UNet
 - DONE - study SR-UNet
-
+- DONE - set up [Hydra Structured Config](https://hydra.cc/docs/advanced/terminology/#structured-config)
