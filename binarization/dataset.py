@@ -1,15 +1,64 @@
 # TODO: refactor CustomPyTorchDataset using function composition
 
-import itertools
 import functools
+import itertools
 from pathlib import Path
 from typing import List, Tuple, Union
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torchvision
 import torchvision.transforms.functional as F
-import numpy as np
 from omegaconf import DictConfig
+
+
+def compute_adjusted_dimension(x: int) -> int:
+    """Given an integer `x`, it returns the integer that:
+    - is closest to `x`
+    - is greater than `x`
+    - is divisible at least four times by 2
+    """
+    if x % 2 != 0:
+        x += 1
+    while x / 2**4 % 2 != 0:
+        x += 2
+    return x
+
+
+def adjust_image_for_unet(image):
+    """Pad until h and w are divisible by 2 at least 4 times"""
+    _, h, w = image.shape
+    adjusted_h = compute_adjusted_dimension(h)
+    adjusted_w = compute_adjusted_dimension(w)
+    return F.pad(
+        image,
+        padding=[
+            (adjusted_w - w) // 2,  # left/right
+            (adjusted_h - h) // 2,  # top/bottom
+        ],
+    )
+
+
+def draw_validation_fig(
+    original_image: torch.Tensor,
+    compressed_image: torch.Tensor,
+    generated_image: torch.Tensor,
+    figsize: Tuple[int, int] = (30, 15),
+):
+    original_image_pil = F.to_pil_image(original_image)
+    compressed_image_pil = F.to_pil_image(compressed_image)
+    generated_image_pil = F.to_pil_image(generated_image)
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=figsize)
+    ax1.imshow(original_image_pil)
+    ax1.set_title('high quality')
+    ax2.imshow(compressed_image_pil)
+    ax2.set_title('low quality')
+    ax3.imshow(original_image_pil)
+    ax3.set_title('high quality')
+    ax4.imshow(generated_image_pil)
+    ax4.set_title('reconstructed')
+    return fig
 
 
 def compose(*functions):
@@ -24,24 +73,6 @@ def get_starting_random_position(x: int, patch_size: int) -> int:
         x -= patch_size
         res = np.random.randint(x)
     return res
-
-
-def index_handler(
-    i: int, train_size: int, val_size: int, training: bool
-) -> Union[int, ValueError]:
-    if train_size == 0:
-        raise ValueError('Empty training set.')
-    if val_size == 0:
-        raise ValueError('Empty validation set.')
-    if training:
-        return i % train_size
-    return train_size + i % val_size
-
-
-def get_train_and_val_sizes(n: int, train_pct: float = 0.8) -> Tuple[int, int]:
-    train_size = int(round(n * train_pct, 0))
-    val_size = n - train_size
-    return train_size, val_size
 
 
 def lists_have_same_elements(a: List, b: List) -> bool:
@@ -117,7 +148,6 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         encoded_frames_dir: Union[Path, str],
         patch_size: int = 96,  # not sure about this initial value
         training: bool = True,
-        train_pct: float = 0.8,
         scale_factor: int = 4,
     ):
         """Custom PyTorch Dataset loader for the training phase. Yield a pair
@@ -130,10 +160,6 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
                 A training patch will be choosen at random from a given frame.
             training (bool, optional): Flag for training vs evaluation phase.
                 Defaults to False.
-            train_pct (float, optional): Percentage of training data.
-                Defaults to 0.8. Random portion of the whole data used
-                for training. The remaining (1 - `train_pct`) of the data
-                will be used as validation.
             scale_factor (Optional[int]):
                 Scale factor between original and encoded frames.
                 Defaults to 4, this means that original frames have a 4:1
@@ -141,7 +167,6 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
         """
         self.patch_size = patch_size
         self.training = training
-        self.train_pct = train_pct
 
         self.original_filenames = (
             list_all_files_in_all_second_level_directories(
@@ -154,20 +179,21 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
             )
         )
         self.num_examples = len(self.original_filenames)
-        self.train_size, self.val_size = get_train_and_val_sizes(
-            self.num_examples, self.train_pct
-        )
-        self.val_size = self.num_examples - self.train_size
         self.scale_factor = scale_factor
 
     def __len__(self):
-        return self.train_size if self.training else self.val_size
+        return self.num_examples
 
     def __getitem__(self, i):
-        i = index_handler(i, self.train_size, self.val_size, self.training)
 
         lq = torchvision.utils.Image.open(self.encoded_filenames[i])
         hq = torchvision.utils.Image.open(self.original_filenames[i])
+
+        if not self.training:
+            return (
+                min_max_scaler(F.pil_to_tensor(lq)),
+                min_max_scaler(F.pil_to_tensor(hq)),
+            )
 
         # crop
         ######################################################################

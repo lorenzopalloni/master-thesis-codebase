@@ -1,15 +1,14 @@
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
-import torch
-import piq
-import lpips
-import tqdm
 import fire
+import lpips
+import piq
+import torch
+import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from binarization import models
-from binarization import dataset
+from binarization import dataset, models
 
 
 def main(project_dir: Path):
@@ -116,8 +115,7 @@ def main(project_dir: Path):
 
             pred_generated_hq = dis(generated_hq.detach())
             loss_fake = bce_loss_op(
-                pred_generated_hq,
-                torch.zeros_like(pred_generated_hq)
+                pred_generated_hq, torch.zeros_like(pred_generated_hq)
             )
 
             loss_dis = loss_true + loss_fake
@@ -137,13 +135,12 @@ def main(project_dir: Path):
             x_max = max(generated_hq.max(), hq.max())
             loss_ssim = 1.0 - ssim_loss_op(
                 dataset.min_max_scaler(generated_hq, x_min, x_max),
-                dataset.min_max_scaler(hq, x_min, x_max)
+                dataset.min_max_scaler(hq, x_min, x_max),
             )
-            
+
             pred_generated_hq = dis(generated_hq)
             loss_bce = bce_loss_op(
-                pred_generated_hq,
-                torch.ones_like(pred_generated_hq)
+                pred_generated_hq, torch.ones_like(pred_generated_hq)
             )
             loss_gen = w0 * loss_lpips + w1 * loss_ssim + w2 * loss_bce
 
@@ -167,7 +164,7 @@ def main(project_dir: Path):
                 )
             )
             ##################################################################
-        
+
         str_now = datetime.now().strftime(r"%Y%m%d%H%M%S")
         torch.save(gen.state_dict(), checkpoints_dir / f"{str_now}.pth")
 

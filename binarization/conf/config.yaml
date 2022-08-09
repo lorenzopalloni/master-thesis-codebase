@@ -7,12 +7,14 @@ params:
     gen_lr: 1e-4
     patch_size: 96
     batch_size: 8  # {8, 32}
+    limit_train_batches: 4
+    limit_val_batches: 4
     num_workers: 2  # {1, 12}
     num_epochs: 2
     w0: 1e-0  # LPIPS weight
     w1: 1e-0  # SSIM weight
     w2: 1e-3  # Adversarial loss weight
-    
+
     unet:
         num_filters: 64
         use_residual: True
@@ -32,5 +34,5 @@ paths:
     val_encoded_frames_dir: "${paths.val_dir}/encoded_frames"
     test_original_frames_dir: "${paths.test_dir}/original_frames"
     test_encoded_frames_dir: "${paths.test_dir}/encoded_frames"
-    
+
     artifacts_dir: "${paths.project_dir}/artifacts"

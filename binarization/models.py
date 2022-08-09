@@ -1,8 +1,8 @@
+from typing import Callable, List, Optional
+
 import torch
 import torch.nn.functional as F
 from torch import nn
-
-from typing import Optional, Callable, List
 
 
 class Discriminator(nn.Module):
@@ -223,16 +223,23 @@ class UNetBlock(nn.Module):
         self.is_reparametrized = False
 
         self.conv_adapter = nn.Conv2d(
-            in_channels=in_channels, out_channels=out_channels,
-            kernel_size=1, stride=1, padding=0
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
         )
         self.conv1 = nn.Conv2d(
-            in_channels=in_channels, out_channels=out_channels,
-            kernel_size=kernel_size, stride=stride, padding=kernel_size // 2
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=kernel_size // 2,
         )
         self.bn = (
             nn.BatchNorm2d(num_features=out_channels)
-            if use_batch_norm else nn.Identity()
+            if use_batch_norm
+            else nn.Identity()
         )
         self.act = nn.ReLU(inplace=True)
 
@@ -247,14 +254,12 @@ class UNetBlock(nn.Module):
         return x
 
     def reparametrize_convs(self):
-        identity_conv = nn.init.dirac_(
-            torch.empty_like(self.conv1.weight)
-        )
+        identity_conv = nn.init.dirac_(torch.empty_like(self.conv1.weight))
         padded_conv_adapter = F.pad(
             input=self.conv_adapter.weight,
             pad=(1, 1, 1, 1),
             mode="constant",
-            value=0
+            value=0,
         )
         if self.in_channels == self.out_channels:
             new_conv_weights = (
@@ -275,14 +280,17 @@ def layer_generator(
     use_residual: bool = True,
     num_blocks: int = 2,
 ):
-    return nn.Sequential(*(
-        UNetBlock(
-            in_channels=in_channels if block_id == 0 else out_channels,
-            out_channels=out_channels,
-            use_batch_norm=use_batch_norm,
-            use_residual=use_residual,
-        ) for block_id in range(int(num_blocks))
-    ))
+    return nn.Sequential(
+        *(
+            UNetBlock(
+                in_channels=in_channels if block_id == 0 else out_channels,
+                out_channels=out_channels,
+                use_batch_norm=use_batch_norm,
+                use_residual=use_residual,
+            )
+            for block_id in range(int(num_blocks))
+        )
+    )
 
 
 def sr_espcn(n_filters, scale_factor=2, out_channels=3, kernel_size=1):
@@ -307,7 +315,7 @@ class UNet(nn.Module):
         num_filters: int = 64,
         use_residual: bool = True,
         use_batch_norm: bool = False,
-        scale_factor: Optional[int] = 2
+        scale_factor: Optional[int] = 2,
     ):
         """U-Net initializer.
 
@@ -334,9 +342,7 @@ class UNet(nn.Module):
         self.scale_factor = scale_factor
 
         self.dconv_down1 = layer_generator(
-            in_channels,
-            num_filters,
-            use_batch_norm=False
+            in_channels, num_filters, use_batch_norm=False
         )
         self.dconv_down2 = layer_generator(
             num_filters,
@@ -378,7 +384,7 @@ class UNet(nn.Module):
         if self.scale_factor is not None:
             self.conv_last = nn.Conv2d(
                 in_channels=num_filters,
-                out_channels=(self.scale_factor ** 2) * out_channels,
+                out_channels=(self.scale_factor**2) * out_channels,
                 kernel_size=1,
                 padding=0,
             )
@@ -439,7 +445,7 @@ class UNet(nn.Module):
 
         if self.use_residual:
             x += F.interpolate(
-                input[:, -self.out_channels:, :, :],  # RGB -> BGR
+                input[:, -self.out_channels :, :, :],  # RGB -> BGR
                 scale_factor=float(self.scale_factor),
                 mode='bicubic',
             )
