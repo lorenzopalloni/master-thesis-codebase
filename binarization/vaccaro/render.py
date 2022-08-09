@@ -1,19 +1,21 @@
 import time
 from threading import Thread
+
 import data_loader as dl
 import torch
 
 torch.backends.cudnn.benchmark = True
-import numpy as np
-from models import *
-import utils
-from tqdm import tqdm
-import cv2
-from pytorch_unet import UNet, SRUnet, SimpleResNet
 from queue import Queue
 
+import cv2
+import numpy as np
+import utils
+from models import *
+from pytorch_unet import SimpleResNet, SRUnet, UNet
+from tqdm import tqdm
 
 # from apex import amp
+
 
 def save_with_cv(pic, imname):
     pic = dl.de_normalize(pic.squeeze(0))
@@ -30,8 +32,26 @@ def write_to_video(pic, writer):
     npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
 
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(npimg, '540p CRF 23 + bicubic', (50, 1030), font, 1, (10, 10, 10), 2, cv2.LINE_AA)
-    cv2.putText(npimg, 'SR-Unet (ours)', (1920 // 2 + 50, 1020), font, 1, (10, 10, 10), 2, cv2.LINE_AA)
+    cv2.putText(
+        npimg,
+        '540p CRF 23 + bicubic',
+        (50, 1030),
+        font,
+        1,
+        (10, 10, 10),
+        2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        npimg,
+        'SR-Unet (ours)',
+        (1920 // 2 + 50, 1020),
+        font,
+        1,
+        (10, 10, 10),
+        2,
+        cv2.LINE_AA,
+    )
 
     writer.write(npimg)
 
@@ -62,7 +82,12 @@ def cv2toTorch(im):
 
 def torchToCv2(pic, rescale_factor=1.0):
     if rescale_factor != 1.0:
-        pic = F.interpolate(pic, scale_factor=rescale_factor, align_corners=True, mode='bicubic')
+        pic = F.interpolate(
+            pic,
+            scale_factor=rescale_factor,
+            align_corners=True,
+            mode='bicubic',
+        )
     pic = dl.de_normalize(pic.squeeze(0))
     pic = pic.permute(1, 2, 0) * 255
     npimg = pic.byte().cpu().numpy()
@@ -73,8 +98,8 @@ def torchToCv2(pic, rescale_factor=1.0):
 def blend_images(i1, i2):
     w = i1.shape[-1]
     w_4 = w // 4
-    i1 = i1[:, :, :, w_4:w_4 * 3]
-    i2 = i2[:, :, :, w_4:w_4 * 3]
+    i1 = i1[:, :, :, w_4 : w_4 * 3]
+    i2 = i2[:, :, :, w_4 : w_4 * 3]
     out = torch.cat([i1, i2], dim=3)
     return out
 
@@ -86,16 +111,29 @@ if __name__ == '__main__':
     dataset_upscale_factor = args.UPSCALE_FACTOR
 
     if arch_name == 'srunet':
-        model = SRUnet(3, residual=True, scale_factor=dataset_upscale_factor, n_filters=args.N_FILTERS,
-                       downsample=args.DOWNSAMPLE, layer_multiplier=args.LAYER_MULTIPLIER)
+        model = SRUnet(
+            3,
+            residual=True,
+            scale_factor=dataset_upscale_factor,
+            n_filters=args.N_FILTERS,
+            downsample=args.DOWNSAMPLE,
+            layer_multiplier=args.LAYER_MULTIPLIER,
+        )
     elif arch_name == 'unet':
-        model = UNet(3, residual=True, scale_factor=dataset_upscale_factor, n_filters=args.N_FILTERS)
+        model = UNet(
+            3,
+            residual=True,
+            scale_factor=dataset_upscale_factor,
+            n_filters=args.N_FILTERS,
+        )
     elif arch_name == 'srgan':
         model = SRResNet()
     elif arch_name == 'espcn':
         model = SimpleResNet(n_filters=64, n_blocks=6)
     else:
-        raise Exception("Unknown architecture. Select one between:", args.archs)
+        raise Exception(
+            "Unknown architecture. Select one between:", args.archs
+        )
 
     model_path = args.MODEL_NAME
     model.load_state_dict(torch.load(model_path))
@@ -109,7 +147,9 @@ if __name__ == '__main__':
 
     if enable_write_to_video:
         fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-        hr_video_writer = cv2.VideoWriter('rendered.mp4', fourcc, 30, (1920, 1080))
+        hr_video_writer = cv2.VideoWriter(
+            'rendered.mp4', fourcc, 30, (1920, 1080)
+        )
 
     metadata = reader.get_metadata()
 
@@ -123,7 +163,6 @@ if __name__ == '__main__':
 
     reader.seek(0)
 
-
     def read_pic(cap, q):
         count = 0
         start = time.time()
@@ -131,15 +170,21 @@ if __name__ == '__main__':
             cv2_im = next(cap)['data']  # .cuda().float()
             cv2_im = cv2_im.cuda().float()
 
-            x = dl.normalize_img(cv2_im / 255.).unsqueeze(0)
+            x = dl.normalize_img(cv2_im / 255.0).unsqueeze(0)
 
-            x_bicubic = torch.clip(F.interpolate(x, scale_factor=args.UPSCALE_FACTOR * args.DOWNSAMPLE, mode='bicubic'),
-                                   min=-1, max=1)
+            x_bicubic = torch.clip(
+                F.interpolate(
+                    x,
+                    scale_factor=args.UPSCALE_FACTOR * args.DOWNSAMPLE,
+                    mode='bicubic',
+                ),
+                min=-1,
+                max=1,
+            )
 
             x = F.pad(x, [0, padW, 0, padH])
             count += 1
             q.put((x, x_bicubic))
-
 
     def show_pic(cap, q):
         while True:
@@ -148,7 +193,6 @@ if __name__ == '__main__':
             cv2_out = torchToCv2(out, rescale_factor=scale)
             cv2.imshow('rendering', cv2_out)
             cv2.waitKey(1)
-
 
     t1 = Thread(target=read_pic, args=(reader, frame_queue)).start()
     t2 = Thread(target=show_pic, args=(cap, out_queue)).start()
@@ -162,7 +206,7 @@ if __name__ == '__main__':
             t0 = time.time()
 
             x, x_bicubic = frame_queue.get()
-            out = model(x)[:, :, :int(height) * 2, :int(width) * 2]
+            out = model(x)[:, :, : int(height) * 2, : int(width) * 2]
 
             out_true = i // (target_fps * 3) % 2 == 0
 
@@ -179,4 +223,8 @@ if __name__ == '__main__':
                     hr_video_writer.release()
                     print("Releasing video")
 
-            tqdm_.set_description("frame time: {}; fps: {}; {}".format(frametime * 1e3, 1000 / frametime, out_true))
+            tqdm_.set_description(
+                "frame time: {}; fps: {}; {}".format(
+                    frametime * 1e3, 1000 / frametime, out_true
+                )
+            )
