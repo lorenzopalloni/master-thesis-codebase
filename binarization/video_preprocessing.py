@@ -1,8 +1,8 @@
-from pathlib import Path
-from typing import Union, Tuple
 import argparse
-import subprocess
 import shutil
+import subprocess
+from pathlib import Path
+from typing import Tuple, Union
 
 
 def compress(
@@ -161,7 +161,7 @@ def main():
         compress(
             input_fn=original_fn,
             output_fn=encoded_fn,
-            scale_factor=args.scale_factor
+            scale_factor=args.scale_factor,
         )
 
         original_frames_subdir = original_frames_dir / original_fn.stem
@@ -169,7 +169,9 @@ def main():
         encoded_frames_subdir = encoded_frames_dir / encoded_fn.stem
         encoded_frames_subdir.mkdir(exist_ok=True)
 
-        video_to_frames(input_fn=original_fn, output_dir=original_frames_subdir)
+        video_to_frames(
+            input_fn=original_fn, output_dir=original_frames_subdir
+        )
         video_to_frames(input_fn=encoded_fn, output_dir=encoded_frames_subdir)
 
 
