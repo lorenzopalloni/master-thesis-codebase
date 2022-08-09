@@ -29,15 +29,11 @@ def run_coverage():
 
 def main():
     parser = argparse.ArgumentParser(
-        prog='python run.py',
-        description='Run custom configurations.'
+        prog='python run.py', description='Run custom configurations.'
     )
     parser.add_argument(
         'command',
-        choices=[
-            'test',
-            'coverage'
-        ],
+        choices=['test', 'coverage'],
     )
     args = parser.parse_args()
 
@@ -50,4 +46,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
