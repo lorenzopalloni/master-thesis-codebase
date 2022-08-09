@@ -15,9 +15,7 @@ class TestDiscriminator:
         dis = models.Discriminator()
 
         actual = dis._out_channels_helper(
-            i=i,
-            default=all_out_channels[-1],
-            init=num_channels
+            i=i, default=all_out_channels[-1], init=num_channels
         )
         expected = num_channels
 
@@ -34,9 +32,7 @@ class TestDiscriminator:
         dis = models.Discriminator()
 
         actual = dis._out_channels_helper(
-            i=i,
-            default=all_out_channels[-1],
-            init=num_channels
+            i=i, default=all_out_channels[-1], init=num_channels
         )
         expected = all_out_channels[-1]
 
@@ -54,9 +50,7 @@ class TestDiscriminator:
         dis = models.Discriminator()
 
         actual = dis._out_channels_helper(
-            i=i,
-            default=all_out_channels[-1],
-            init=num_channels
+            i=i, default=all_out_channels[-1], init=num_channels
         )
         expected = all_out_channels[-1] * 2
 
@@ -75,9 +69,7 @@ class TestDiscriminator:
         dis = models.Discriminator()
 
         actual = dis._out_channels_helper(
-            i=i,
-            default=all_out_channels[-1],
-            init=num_channels
+            i=i, default=all_out_channels[-1], init=num_channels
         )
         expected = all_out_channels[-1]
 

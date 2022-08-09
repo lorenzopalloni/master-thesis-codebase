@@ -1,8 +1,8 @@
-import pytest  # noqa: F401
 from pathlib import Path  # noqa F401
 
-import torchvision
 import numpy as np
+import pytest  # noqa: F401
+import torchvision
 
 from binarization import dataset
 
@@ -178,65 +178,6 @@ class TestListAllFiles:
         assert dataset.lists_have_same_elements(expected, actual)
 
 
-class TestGetTrainAndValSizes:
-    def test_naive(self):
-        n = 10
-        train_pct = 0.8
-        expected = (8, 2)
-        actual = dataset.get_train_and_val_sizes(n, train_pct)
-        assert actual == expected
-
-    def test_train_pct_equal_one(self):
-        n = 10
-        train_pct = 1.0
-        expected = (10, 0)
-        actual = dataset.get_train_and_val_sizes(n, train_pct)
-        assert actual == expected
-
-    def test_train_pct_equal_zero(self):
-        n = 10
-        train_pct = 0.0
-        expected = (0, 10)
-        actual = dataset.get_train_and_val_sizes(n, train_pct)
-        assert actual == expected
-
-
-class TestIndexHandler:
-    def test_naive(self):
-        i = 0
-        train_size = 8
-        val_size = 2
-        training = True
-        expected = 0
-        actual = dataset.index_handler(i, train_size, val_size, training)
-        assert actual == expected
-
-    def test_naive_not_training(self):
-        i = 0
-        train_size = 8
-        val_size = 2
-        training = False
-        expected = 8
-        actual = dataset.index_handler(i, train_size, val_size, training)
-        assert actual == expected
-
-    def test_train_size_equal_zero(self):
-        i = 0
-        train_size = 0
-        val_size = 2
-        training = True
-        with pytest.raises(ValueError):
-            dataset.index_handler(i, train_size, val_size, training)
-
-    def test_validation_size_equal_zero(self):
-        i = 0
-        train_size = 4
-        val_size = 0
-        training = True
-        with pytest.raises(ValueError):
-            dataset.index_handler(i, train_size, val_size, training)
-
-
 class TestGetStartingRandomPosition:
     def test_naive(self):
         height = 10
@@ -264,10 +205,12 @@ def test_compose():
     it = iter(ds)
     x, _ = next(it)
     y, _ = next(it)
-    torchvision_compose = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor(),
-        lambda x: (x - 0.5) * 2.0,
-    ])
+    torchvision_compose = torchvision.transforms.Compose(
+        [
+            torchvision.transforms.ToTensor(),
+            lambda x: (x - 0.5) * 2.0,
+        ]
+    )
     expected = torchvision_compose(x)
     my_compose = dataset.compose(
         torchvision.transforms.ToTensor(),
@@ -276,3 +219,8 @@ def test_compose():
     actual = my_compose(x)
     assert expected.equal(actual)
 
+
+def test_compute_adjusted_dimension():
+    assert dataset.compute_adjusted_dimension(256) == 256
+    assert dataset.compute_adjusted_dimension(270) == 288
+    assert dataset.compute_adjusted_dimension(540) == 544
