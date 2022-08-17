@@ -14,7 +14,7 @@ repos:
     rev: 5.10.1
     hooks:
     -   id: isort
-        args: ["--profile", "black", "--config=./pyproject.toml"]
+        args: ["--profile", "black", --line-length=79]
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.971
     hooks:

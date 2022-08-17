@@ -3,39 +3,50 @@
 import functools
 import itertools
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torchvision
 import torchvision.transforms.functional as F
 from omegaconf import DictConfig
+from torchvision.utils import Image
 
 
-def compute_adjusted_dimension(x: int) -> int:
-    """Given an integer `x`, it returns the integer that:
-    - is closest to `x`
-    - is greater than `x`
+def compute_adjusted_dimension(an_integer: int) -> int:
+    """Given an integer `an_integer`, return another integer that:
+    - is greater than `an_integer`
     - is divisible at least four times by 2
+    - is the closest to `an_integer`
+
+    Useful for adapting the size of an image to feed a UNet-like architecture.
+
+    Args:
+        an_integer (int): an integer greater than 0.
+
+    Returns:
+        int: an integer with the properties described above.
     """
-    if x % 2 != 0:
-        x += 1
-    while x / 2**4 % 2 != 0:
-        x += 2
-    return x
+    assert (
+        an_integer > 0
+    ), f"Input should be > 0, but `{an_integer}` was provided."
+    if an_integer % 2 != 0:
+        an_integer += 1
+    while an_integer / 2**4 % 2 != 0:
+        an_integer += 2
+    return an_integer
 
 
-def adjust_image_for_unet(image):
-    """Pad until h and w are divisible by 2 at least 4 times"""
-    _, h, w = image.shape
-    adjusted_h = compute_adjusted_dimension(h)
-    adjusted_w = compute_adjusted_dimension(w)
+def adjust_image_for_unet(image: torch.Tensor) -> torch.Tensor:
+    """Pad until image height and width are divisible by 2 at least 4 times"""
+    _, height, width = image.shape
+    adjusted_height = compute_adjusted_dimension(height)
+    adjusted_width = compute_adjusted_dimension(width)
     return F.pad(
         image,
         padding=[
-            (adjusted_w - w) // 2,  # left/right
-            (adjusted_h - h) // 2,  # top/bottom
+            (adjusted_width - width) // 2,  # left/right
+            (adjusted_height - height) // 2,  # top/bottom
         ],
     )
 
@@ -45,7 +56,10 @@ def draw_validation_fig(
     compressed_image: torch.Tensor,
     generated_image: torch.Tensor,
     figsize: Tuple[int, int] = (30, 15),
-):
+) -> plt.Figure:
+    """Draw a matplotlib figure useful for validating the training process
+    of a representation model.
+    """
     original_image_pil = F.to_pil_image(original_image)
     compressed_image_pil = F.to_pil_image(compressed_image)
     generated_image_pil = F.to_pil_image(generated_image)
@@ -75,12 +89,13 @@ def get_starting_random_position(x: int, patch_size: int) -> int:
     return res
 
 
-def lists_have_same_elements(a: List, b: List) -> bool:
-    set_a = set(a)
-    set_b = set(b)
-    if len(set_a) != len(set_b):
+def lists_have_same_elements(a_list: List, another_list: List) -> bool:
+    """Assure that two given lists have the same elements."""
+    a_set = set(a_list)
+    another_set = set(another_list)
+    if len(a_set) != len(another_set):
         return False
-    return len(set_a.difference(set_b)) == 0
+    return len(a_set.difference(another_set)) == 0
 
 
 def list_files(
@@ -88,7 +103,7 @@ def list_files(
 ) -> List[Path]:
     """List files in a given directory with the same extension.
 
-    By default the result is provided in lexicographic order.
+    By default, the result is provided in lexicographic order.
     """
     res = [
         x
@@ -103,7 +118,7 @@ def list_files(
 def list_directories(path: Path, sort_result: bool = True) -> List[Path]:
     """List all the directories in a given path.
 
-    By default the result is provided in lexicographic order.
+    By default, the result is provided in lexicographic order.
     """
     res = [x for x in path.iterdir() if x.is_dir()]
     if sort_result:
@@ -116,7 +131,7 @@ def list_all_files_in_all_second_level_directories(
 ) -> List[Path]:
     """List all files in the second level directories of the given path.
 
-    path. By default the result is provided in lexicographic order.
+    By default, the result is provided in lexicographic order.
     """
     res = itertools.chain.from_iterable(
         [
@@ -160,14 +175,12 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
                 A training patch will be choosen at random from a given frame.
             training (bool, optional): Flag for training vs evaluation phase.
                 Defaults to False.
-            scale_factor (Optional[int]):
-                Scale factor between original and encoded frames.
-                Defaults to 4, this means that original frames have a 4:1
-                resolution ratio compared to encoded frames.
+            scale_factor (Optional[int]): Scale factor between original and
+                encoded frames. Defaults to 4, this means that original frames
+                have a 4:1 resolution ratio compared to encoded frames.
         """
         self.patch_size = patch_size
         self.training = training
-
         self.original_filenames = (
             list_all_files_in_all_second_level_directories(
                 Path(original_frames_dir)
@@ -186,47 +199,52 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
 
-        lq = torchvision.utils.Image.open(self.encoded_filenames[i])
-        hq = torchvision.utils.Image.open(self.original_filenames[i])
+        compressed_image = Image.open(self.encoded_filenames[i])
+        original_image = Image.open(self.original_filenames[i])
 
         if not self.training:
             return (
-                min_max_scaler(F.pil_to_tensor(lq)),
-                min_max_scaler(F.pil_to_tensor(hq)),
+                min_max_scaler(F.pil_to_tensor(compressed_image)),
+                min_max_scaler(F.pil_to_tensor(original_image)),
             )
 
         # crop
         ######################################################################
-        w, h = lq.size
+        w, h = compressed_image.size
         a = get_starting_random_position(w, self.patch_size)
         b = get_starting_random_position(h, self.patch_size)
-        lq_positions = (a, b, a + self.patch_size, b + self.patch_size)
-        lq = lq.crop(lq_positions)
-        hq_positions = tuple(
-            map(lambda x: x * self.scale_factor, lq_positions)
+        compressed_image_positions = (
+            a,
+            b,
+            a + self.patch_size,
+            b + self.patch_size,
         )
-        hq = hq.crop(hq_positions)
+        compressed_patch = compressed_image.crop(compressed_image_positions)
+        original_image_positions = tuple(
+            map(lambda x: x * self.scale_factor, compressed_image_positions)
+        )
+        original_patch = original_image.crop(original_image_positions)
         ######################################################################
 
-        # hq = hq.resize((
+        # original_image = original_image.resize((
         #     int(upscaling_factor * self.patch_size),
         #     int(upscaling_factor * self.patch_size)
         # ))
 
         if np.random.random() < 0.5:
-            lq = F.hflip(lq)
-            hq = F.hflip(hq)
+            compressed_patch = F.hflip(compressed_patch)
+            original_patch = F.hflip(original_patch)
 
         # custom_transform = torchvision.transforms.Compose([
         #     torchvision.transforms.ToTensor(),
         #     lambda x: (x - 0.5) * 2.0,
         # ])
 
-        # lq, hq = custom_transform(lq), custom_transform(hq)
+        # compressed_image, original_image = custom_transform(compressed_image), custom_transform(original_image)
 
         return (
-            min_max_scaler(F.pil_to_tensor(lq)),
-            min_max_scaler(F.pil_to_tensor(hq)),
+            min_max_scaler(F.pil_to_tensor(compressed_patch)),
+            min_max_scaler(F.pil_to_tensor(original_patch)),
         )
 
 
