@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -15,8 +16,8 @@ class Params:
     gen_lr: float
     patch_size: int
     batch_size: int
-    limit_train_batches: int
-    limit_val_batches: int
+    limit_train_batches: Optional[int]
+    limit_val_batches: Optional[int]
     num_workers: int
     num_epochs: int
     w0: float
