@@ -12,19 +12,21 @@ def set_up_test_assets():
     if not encoded_dir.exists():
         subprocess.run(
             'python ./binarization/video_preprocessing.py -i '
-            f'{original_dir.as_posix()}'.split(' ')
+            f'{original_dir.as_posix()}'.split(' '),
+            check=True,
         )
 
 
 def run_test():
     set_up_test_assets()
-    subprocess.run('python -m pytest tests -vv'.split(' '))
+    proc = subprocess.run('python -m pytest tests -vv'.split(' '), check=True)
+    return proc.stdout
 
 
 def run_coverage():
     set_up_test_assets()
-    subprocess.run('coverage run -m pytest tests'.split(' '))
-    subprocess.run('coverage report -m'.split(' '))
+    subprocess.run('coverage run -m pytest tests'.split(' '), check=True)
+    subprocess.run('coverage report -m'.split(' '), check=True)
 
 
 def main():
