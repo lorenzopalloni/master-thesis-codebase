@@ -7,10 +7,10 @@ params:
     gen_lr: 1e-4
     patch_size: 96
     batch_size: 8  # {8, 32}
-    limit_train_batches: 4
-    limit_val_batches: 4
+    limit_train_batches: null
+    limit_val_batches: 8
     num_workers: 2  # {1, 12}
-    num_epochs: 2
+    num_epochs: 10
     w0: 1e-0  # LPIPS weight
     w1: 1e-0  # SSIM weight
     w2: 1e-3  # Adversarial loss weight
