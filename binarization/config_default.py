@@ -1,7 +1,7 @@
 # pylint: disable=missing-module-docstring,missing-class-docstring,too-many-instance-attributes
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from dataclasses import dataclass
 
 
 @dataclass

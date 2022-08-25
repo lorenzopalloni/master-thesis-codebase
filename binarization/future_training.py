@@ -17,8 +17,12 @@ from binarization.vaccaro import pytorch_ssim
 
 def main(cfg: Gifnoc):
 
-    specific_artifacts_dir: Path = utils.make_specific_artifacts_dir(artifacts_dir=Path(cfg.paths.artifacts_dir))
-    tensorboard_logger = utils.create_tensorboard_logger(specific_artifacts_dir=specific_artifacts_dir)
+    specific_artifacts_dir: Path = utils.make_specific_artifacts_dir(
+        artifacts_dir=Path(cfg.paths.artifacts_dir)
+    )
+    tensorboard_logger = utils.create_tensorboard_logger(
+        specific_artifacts_dir=specific_artifacts_dir
+    )
     checkpoints_dir = specific_artifacts_dir / 'checkpoints'
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
@@ -57,9 +61,16 @@ def main(cfg: Gifnoc):
 
     global_step_id = 0
     for epoch_id in range(cfg.params.num_epochs):
-        progress_bar_train = tqdm(dl_train, total=cfg.params.limit_train_batches)
-        for step_id_train, (compressed_patches, original_patches) in enumerate(progress_bar_train):
-            if cfg.params.limit_train_batches is not None and step_id_train > cfg.params.limit_train_batches:
+        progress_bar_train = tqdm(
+            dl_train, total=cfg.params.limit_train_batches
+        )
+        for step_id_train, (compressed_patches, original_patches) in enumerate(
+            progress_bar_train
+        ):
+            if (
+                cfg.params.limit_train_batches is not None
+                and step_id_train > cfg.params.limit_train_batches
+            ):
                 break
             gen.train()
             # dis.train()
@@ -74,7 +85,9 @@ def main(cfg: Gifnoc):
 
             pred_original_patches = dis(original_patches)
 
-            loss_true = bce_loss_op(pred_original_patches, torch.ones_like(pred_original_patches))
+            loss_true = bce_loss_op(
+                pred_original_patches, torch.ones_like(pred_original_patches)
+            )
 
             pred_generated_patches = dis(generated_patches.detach())
             loss_fake = bce_loss_op(
@@ -93,7 +106,9 @@ def main(cfg: Gifnoc):
             ##################################################################
             gen_optim.zero_grad()
 
-            loss_lpips = lpips_vgg_loss_op(generated_patches, original_patches).mean()
+            loss_lpips = lpips_vgg_loss_op(
+                generated_patches, original_patches
+            ).mean()
 
             # x_min = min(
             #     generated_patches.min(), original_patches.min()
@@ -115,7 +130,11 @@ def main(cfg: Gifnoc):
                 pred_generated_patches,
                 torch.ones_like(pred_generated_patches),
             )
-            loss_gen = cfg.params.w0 * loss_lpips + cfg.params.w1 * loss_ssim + cfg.params.w2 * loss_bce
+            loss_gen = (
+                cfg.params.w0 * loss_lpips
+                + cfg.params.w1 * loss_ssim
+                + cfg.params.w2 * loss_bce
+            )
 
             loss_gen.backward()
             gen_optim.step()
@@ -132,8 +151,12 @@ def main(cfg: Gifnoc):
                 f' + w2 * {float(loss_bce):.4f})'
             )
             ##################################################################
-            tensorboard_logger.add_scalar('lossD', scalar_value=loss_dis, global_step=global_step_id)
-            tensorboard_logger.add_scalar('lossG', scalar_value=loss_gen, global_step=global_step_id)
+            tensorboard_logger.add_scalar(
+                'lossD', scalar_value=loss_dis, global_step=global_step_id
+            )
+            tensorboard_logger.add_scalar(
+                'lossG', scalar_value=loss_gen, global_step=global_step_id
+            )
             # tensorboard_logger.add_image('output_example', img_tensor=<insert-image-here>, global_step=epoch_id * step_id)
 
             global_step_id += 1
@@ -143,25 +166,39 @@ def main(cfg: Gifnoc):
             compressed_patches_val,
             original_patches_val,
         ) in enumerate(progress_bar_val):
-            if cfg.params.limit_val_batches is not None and step_id_val > cfg.params.limit_val_batches:
+            if (
+                cfg.params.limit_val_batches is not None
+                and step_id_val > cfg.params.limit_val_batches
+            ):
                 break
             generated_patches_val_list = []
             for batch_id_val in range(original_patches_val.shape[0]):
-
 
                 compressed_patch_val = compressed_patches_val[batch_id_val]
                 original_patch_val = original_patches_val[batch_id_val]
 
                 preprocessed_compressed_patch_val = (
-                    dataset.adjust_image_for_unet(compressed_patch_val).unsqueeze(0).to(device)
+                    dataset.adjust_image_for_unet(compressed_patch_val)
+                    .unsqueeze(0)
+                    .to(device)
                 )
 
                 gen.eval()
                 with torch.no_grad():
-                    unprocessed_generated_patch_val = gen(preprocessed_compressed_patch_val)
+                    unprocessed_generated_patch_val = gen(
+                        preprocessed_compressed_patch_val
+                    )
                     generated_patch_val = F.crop(
-                        dataset.inv_min_max_scaler(unprocessed_generated_patch_val.cpu()).clip(0, 255).squeeze() / 255.0,
-                        0, 0, original_patch_val.shape[-2], original_patch_val.shape[-1]
+                        dataset.inv_min_max_scaler(
+                            unprocessed_generated_patch_val.cpu()
+                        )
+                        .clip(0, 255)
+                        .squeeze()
+                        / 255.0,
+                        0,
+                        0,
+                        original_patch_val.shape[-2],
+                        original_patch_val.shape[-1],
                     )
 
                 fig = dataset.draw_validation_fig(
@@ -182,11 +219,9 @@ def main(cfg: Gifnoc):
             print(ssim_val)
 
             tensorboard_logger.add_scalar(
-                "ssim_val",
-                scalar_value=ssim_val,
-                global_step=global_step_id
+                "ssim_val", scalar_value=ssim_val, global_step=global_step_id
             )
-        
+
         # torch.save(
         #     gen.state_dict(),
         #     Path(

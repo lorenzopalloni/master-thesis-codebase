@@ -8,10 +8,10 @@ from typing import Dict, List, Optional, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.functional as F
-from torchvision.utils import Image
 from gifnoc import Gifnoc
+from torch.utils.data import DataLoader, Dataset
+from torchvision.utils import Image
 
 
 def compute_adjusted_dimension(an_integer: int) -> int:
@@ -28,7 +28,9 @@ def compute_adjusted_dimension(an_integer: int) -> int:
     Returns:
         int: an integer with the properties described above.
     """
-    assert an_integer > 0, f"Input should be > 0, but `{an_integer}` was provided."
+    assert (
+        an_integer > 0
+    ), f"Input should be > 0, but `{an_integer}` was provided."
     if an_integer % 2 != 0:
         an_integer += 1
     while an_integer / 2**4 % 2 != 0:
@@ -95,12 +97,18 @@ def lists_have_same_elements(a_list: List, another_list: List) -> bool:
     return len(a_set.difference(another_set)) == 0
 
 
-def list_files(path: Path, extension: str = '.jpg', sort_result: bool = True) -> List[Path]:
+def list_files(
+    path: Path, extension: str = '.jpg', sort_result: bool = True
+) -> List[Path]:
     """List files in a given directory with the same extension.
 
     By default, the result is provided in lexicographic order.
     """
-    res = [x for x in path.iterdir() if not x.is_dir() and x.name.endswith(extension)]
+    res = [
+        x
+        for x in path.iterdir()
+        if not x.is_dir() and x.name.endswith(extension)
+    ]
     if sort_result:
         return sorted(res)
     return res
@@ -125,18 +133,25 @@ def list_all_files_in_all_second_level_directories(
     By default, the result is provided in lexicographic order.
     """
     res = itertools.chain.from_iterable(
-        [list_files(i_dir, extension, sort_result=False) for i_dir in list_directories(path)]
+        [
+            list_files(i_dir, extension, sort_result=False)
+            for i_dir in list_directories(path)
+        ]
     )
     if sort_result:
         return sorted(res)
     return list(res)
 
 
-def min_max_scaler(x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0) -> torch.Tensor:
+def min_max_scaler(
+    x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0
+) -> torch.Tensor:
     return (x - x_min) / (x_max - x_min)
 
 
-def inv_min_max_scaler(x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0) -> torch.Tensor:
+def inv_min_max_scaler(
+    x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0
+) -> torch.Tensor:
     return (x * (x_max - x_min) + x_min).int()
 
 
@@ -165,8 +180,16 @@ class CustomPyTorchDataset(Dataset):
         """
         self.patch_size = patch_size
         self.training = training
-        self.original_filenames = list_all_files_in_all_second_level_directories(Path(original_frames_dir))
-        self.encoded_filenames = list_all_files_in_all_second_level_directories(Path(encoded_frames_dir))
+        self.original_filenames = (
+            list_all_files_in_all_second_level_directories(
+                Path(original_frames_dir)
+            )
+        )
+        self.encoded_filenames = (
+            list_all_files_in_all_second_level_directories(
+                Path(encoded_frames_dir)
+            )
+        )
         self.num_examples = len(self.original_filenames)
         self.scale_factor = scale_factor
 
@@ -196,7 +219,9 @@ class CustomPyTorchDataset(Dataset):
             b + self.patch_size,
         )
         compressed_patch = compressed_image.crop(compressed_image_positions)
-        original_image_positions = tuple(map(lambda x: x * self.scale_factor, compressed_image_positions))
+        original_image_positions = tuple(
+            map(lambda x: x * self.scale_factor, compressed_image_positions)
+        )
         original_patch = original_image.crop(original_image_positions)
         ######################################################################
 
