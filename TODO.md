@@ -7,9 +7,9 @@ TODO List
 > remember to work on dev branch
 
 ## high priority
-- log lots of `piq.[metrics]`, then:
+- log lots of `piq.[metric]`, then:
     - train with/without ssim
-    - understand why your way of including ssim was bad for the training
+    - understand why your way of including ssim was so bad for the training
     - replace tensorflow with mlflow
 
 - A/B test with previous ssim loss

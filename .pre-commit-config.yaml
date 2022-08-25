@@ -9,12 +9,12 @@ repos:
     rev: 22.6.0
     hooks:
     -   id: black
-        args: [--config=./pyproject.toml]
+        args: ["--line-length=79"]
 -   repo: https://github.com/pycqa/isort
     rev: 5.10.1
     hooks:
     -   id: isort
-        args: ["--profile", "black", --line-length=79]
+        args: ["--profile=black", "--line-length=79"]
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.971
     hooks:
@@ -60,3 +60,4 @@ repos:
             unexpected-keyword-arg,
             redefined-builtin,",
         ]
+
