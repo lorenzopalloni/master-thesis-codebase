@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from gifnoc import Gifnoc
 
 
 @dataclass
@@ -21,16 +22,18 @@ class ParamsConfig:
     limit_train_batches: Optional[int] = 2
     limit_val_batches: Optional[int] = 2
     num_workers: int = 4  # {1, 12}
-    num_epochs: int = 10
+    num_epochs: int = 100
     w0: float = 1e-0  # LPIPS weight
     w1: float = 1e-0  # SSIM weight
     w2: float = 1e-3  # Adversarial loss weight
+    ckpt_path_to_resume: Optional[Path] = None
     unet: UNetConfig = UNetConfig()
 
 
 @dataclass
 class PathsConfig:
-    project_dir: Path = Path().resolve()
+    project_dir: Path = Path(__file__).parent.parent
+    artifacts_dir: Path = project_dir / "artifacts"
     data_dir: Path = project_dir / "data"
     train_dir: Path = data_dir / "train"
     val_dir: Path = data_dir / "val"
@@ -41,14 +44,15 @@ class PathsConfig:
     val_encoded_frames_dir: Path = val_dir / "encoded_frames"
     test_original_frames_dir: Path = test_dir / "original_frames"
     test_encoded_frames_dir: Path = test_dir / "encoded_frames"
-    artifacts_dir: Path = project_dir / "artifacts"
 
 
 @dataclass
-class MainConfig:
+class DefaultConfig:
     params: ParamsConfig = ParamsConfig()
     paths: PathsConfig = PathsConfig()
 
+
+default_config = Gifnoc.from_dataclass(DefaultConfig())
 
 if __name__ == "__main__":
     from gifnoc import Gifnoc

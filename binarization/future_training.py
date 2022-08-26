@@ -1,17 +1,17 @@
 """Training module"""
 
 from pathlib import Path
+from unittest import defaultTestLoader
 
 import lpips
 import matplotlib.pyplot as plt
 import piq
 import torch
 import torchvision.transforms.functional as F
-from gifnoc import Gifnoc
 from tqdm import tqdm
 
 from binarization import dataset, models, utils
-from binarization.config_default import MainConfig
+from binarization.config import default_config, Gifnoc
 from binarization.vaccaro import pytorch_ssim
 
 
@@ -32,6 +32,9 @@ def main(cfg: Gifnoc):
         use_batch_norm=cfg.params.unet.use_batch_norm,
         scale_factor=cfg.params.unet.scale_factor,
     )
+    if cfg.params.ckpt_path_to_resume:
+        print(f'>>> resume from {cfg.params.ckpt_path_to_resume}')
+        gen.load_state_dict(torch.load(cfg.params.ckpt_path_to_resume.as_posix()))
 
     dis = models.Discriminator()
 
@@ -52,12 +55,7 @@ def main(cfg: Gifnoc):
     lpips_alex_loss_op.to(device)
     print(f'current device: {device}')
 
-    dl_train, dl_val, dl_test = dataset.make_dataloaders(
-        cfg=cfg,
-        patch_size=cfg.params.patch_size,
-        batch_size=cfg.params.batch_size,
-        num_workers=cfg.params.num_workers,
-    )
+    dl_train, dl_val, dl_test = dataset.make_dataloaders(cfg=cfg)
 
     global_step_id = 0
     for epoch_id in range(cfg.params.num_epochs):
@@ -73,7 +71,7 @@ def main(cfg: Gifnoc):
             ):
                 break
             gen.train()
-            # dis.train()
+            dis.train()
 
             # Discriminator training step
             ##################################################################
@@ -208,7 +206,7 @@ def main(cfg: Gifnoc):
                 )
 
                 tensorboard_logger.add_figure(
-                    tag=f"epoch-{epoch_id:03d}-step_id_val-{step_id_val:03d}",
+                    tag=f"val_fig_{step_id_val:03d}",
                     figure=fig,
                     global_step=global_step_id,
                 )
@@ -216,23 +214,24 @@ def main(cfg: Gifnoc):
 
             generated_patches_val = torch.stack(generated_patches_val_list)
             ssim_val = piq.ssim(original_patches_val, generated_patches_val)
-            print(ssim_val)
 
             tensorboard_logger.add_scalar(
                 "ssim_val", scalar_value=ssim_val, global_step=global_step_id
             )
 
-        # torch.save(
-        #     gen.state_dict(),
-        #     Path(
-        #         checkpoints_dir,
-        #         "epoch-{}-lossD-{:.2f}-lossG-{:.2f}.pth".format(
-        #             epoch_id, loss_dis, loss_gen
-        #         ),
-        #     ),
-        # )
+        current_checkpoint_path = Path(
+            checkpoints_dir,
+            "epoch_{}_lossG_{:.2f}.pth".format(
+                epoch_id, loss_gen
+            ),
+        )
+        torch.save(gen.state_dict(), current_checkpoint_path)
 
 
 if __name__ == "__main__":
-    cfg = Gifnoc.from_dataclass(MainConfig())
+    cfg = default_config
+    cfg.params.limit_train_batches = None
+    cfg.params.limit_val_batches = 4
+    cfg.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/2022_08_26/07_05_04/checkpoints/epoch-1-lossD-0.00-lossG-0.64.pth')
+
     main(cfg)

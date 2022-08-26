@@ -20,14 +20,19 @@ def create_tensorboard_logger(specific_artifacts_dir: Path) -> SummaryWriter:
     return SummaryWriter(log_dir=runs_dir)
 
 
-def get_last_checkpoint_dir(artifacts_dir: Path) -> Path:
-    """Retrives the last created directory for saving model checkpoints"""
-    last_parent = sorted(artifacts_dir.iterdir())[-1]
-    last_child = sorted(last_parent.iterdir())[-1]
-    return last_child / 'checkpoints'
-
-
-def get_last_checkpoint(artifacts_dir: Path) -> Path:
-    """Retrieves the last saved model checkpoint"""
-    last_checkpoint_dir = get_last_checkpoint_dir(artifacts_dir)
-    return sorted(last_checkpoint_dir.iterdir())[-1]
+# TODO: not sure if it is worth to spend too much time here, maybe have a
+# look at Yolact's implementation of a class that manages paths
+# def get_last_checkpoint_dir(artifacts_dir: Path) -> Path:
+#     """Retrives the last created directory for saving model checkpoints"""
+#     parents = sorted(artifacts_dir.iterdir())
+#     i = 1
+#     children = sorted(parents[-i].iterdir())
+#     while not list((children[-i] / 'checkpoints').iterdir()):
+#         i += 1
+#         children = sorted(parents[-i].iterdir())
+#     last_child = children[-i]
+#     return last_child / 'checkpoints'
+# def get_last_checkpoint(artifacts_dir: Path) -> Path:
+#     """Retrieves the last saved model checkpoint"""
+#     last_checkpoint_dir = get_last_checkpoint_dir(artifacts_dir)
+#     return sorted(last_checkpoint_dir.iterdir())[-1]

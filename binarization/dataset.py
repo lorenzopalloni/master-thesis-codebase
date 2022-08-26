@@ -11,6 +11,7 @@ import torch
 import torchvision.transforms.functional as F
 from gifnoc import Gifnoc
 from torch.utils.data import DataLoader, Dataset
+import PIL
 from torchvision.utils import Image
 
 
@@ -65,12 +66,10 @@ def draw_validation_fig(
     compressed_image_pil = F.to_pil_image(compressed_image)
     generated_image_pil = F.to_pil_image(generated_image)
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
-    ax1.imshow(original_image_pil)
-    ax1.set_title('high quality')
-    ax2.imshow(generated_image_pil)
-    ax2.set_title('reconstructed')
-    ax3.imshow(compressed_image_pil)
-    ax3.set_title('low quality')
+    ax1.imshow(original_image_pil); ax1.set_title('high quality'); ax1.axis('off')
+    ax2.imshow(generated_image_pil); ax2.set_title('reconstructed'); ax2.axis('off')
+    ax3.imshow(compressed_image_pil); ax3.set_title('low quality'); ax3.axis('off')
+    fig.subplots_adjust(top=1.0, bottom=0.0, right=1.0, left=0.0, hspace=0.0, wspace=0.0)
     return fig
 
 
@@ -86,6 +85,28 @@ def get_starting_random_position(x: int, patch_size: int) -> int:
         x -= patch_size
         res = np.random.randint(x)
     return res
+
+def crop_patches(
+    compressed_image: PIL.Image.Image,
+    original_image: PIL.Image.Image,
+    patch_size: int,
+    scale_factor: int,
+) -> Tuple[PIL.Image.Image, PIL.Image.Image]:
+    w, h = compressed_image.size
+    a = get_starting_random_position(w, patch_size)
+    b = get_starting_random_position(h, patch_size)
+    compressed_image_positions = (
+        a,
+        b,
+        a + patch_size,
+        b + patch_size,
+    )
+    compressed_patch = compressed_image.crop(compressed_image_positions)
+    original_image_positions = tuple(
+        map(lambda x: x * scale_factor, compressed_image_positions)
+    )
+    original_patch = original_image.crop(original_image_positions)
+    return compressed_patch, original_patch
 
 
 def lists_have_same_elements(a_list: List, another_list: List) -> bool:
@@ -158,8 +179,8 @@ def inv_min_max_scaler(
 class CustomPyTorchDataset(Dataset):
     def __init__(
         self,
-        original_frames_dir: Union[Path, str],
-        encoded_frames_dir: Union[Path, str],
+        original_frames_dir: Path,
+        encoded_frames_dir: Path,
         patch_size: int = 96,  # not sure about this initial value
         training: bool = True,
         scale_factor: int = 4,
@@ -202,28 +223,24 @@ class CustomPyTorchDataset(Dataset):
         original_image = Image.open(self.original_filenames[i])
 
         if not self.training:
+            np.random.seed(42)
+            compressed_patch, original_patch = crop_patches(
+                compressed_image=compressed_image,
+                original_image=original_image,
+                patch_size=self.patch_size,
+                scale_factor=self.scale_factor,
+            )
             return (
-                min_max_scaler(F.pil_to_tensor(compressed_image)),
-                min_max_scaler(F.pil_to_tensor(original_image)),
+                min_max_scaler(F.pil_to_tensor(compressed_patch)),
+                min_max_scaler(F.pil_to_tensor(original_patch)),
             )
 
-        # crop
-        ######################################################################
-        w, h = compressed_image.size
-        a = get_starting_random_position(w, self.patch_size)
-        b = get_starting_random_position(h, self.patch_size)
-        compressed_image_positions = (
-            a,
-            b,
-            a + self.patch_size,
-            b + self.patch_size,
+        compressed_patch, original_patch = crop_patches(
+            compressed_image=compressed_image,
+            original_image=original_image,
+            patch_size=self.patch_size,
+            scale_factor=self.scale_factor,
         )
-        compressed_patch = compressed_image.crop(compressed_image_positions)
-        original_image_positions = tuple(
-            map(lambda x: x * self.scale_factor, compressed_image_positions)
-        )
-        original_patch = original_image.crop(original_image_positions)
-        ######################################################################
 
         # original_image = original_image.resize((
         #     int(upscaling_factor * self.patch_size),
@@ -315,31 +332,28 @@ def make_test_dataloader(
 
 def make_dataloaders(
     cfg: Gifnoc,
-    patch_size: int,
-    batch_size: int,
-    num_workers: int,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     return (
         make_train_dataloader(
             original_frames_dir=cfg.paths.train_original_frames_dir,
             encoded_frames_dir=cfg.paths.train_encoded_frames_dir,
-            patch_size=patch_size,
-            batch_size=batch_size,
-            num_workers=num_workers,
+            patch_size=cfg.params.patch_size,
+            batch_size=cfg.params.batch_size,
+            num_workers=cfg.params.num_workers,
         ),
         make_val_dataloader(
             original_frames_dir=cfg.paths.val_original_frames_dir,
             encoded_frames_dir=cfg.paths.val_encoded_frames_dir,
-            patch_size=patch_size,
-            batch_size=batch_size,
-            num_workers=num_workers,
+            patch_size=cfg.params.patch_size,
+            batch_size=cfg.params.batch_size,
+            num_workers=cfg.params.num_workers,
         ),
         make_test_dataloader(
             original_frames_dir=cfg.paths.test_original_frames_dir,
             encoded_frames_dir=cfg.paths.test_encoded_frames_dir,
-            patch_size=patch_size,
-            batch_size=batch_size,
-            num_workers=num_workers,
+            patch_size=cfg.params.patch_size,
+            batch_size=cfg.params.batch_size,
+            num_workers=cfg.params.num_workers,
         ),
     )
 
