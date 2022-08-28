@@ -1,6 +1,7 @@
 import argparse
 import subprocess
 from pathlib import Path
+from typing import Callable, Dict
 
 
 def set_up_test_assets():
@@ -29,20 +30,20 @@ def run_coverage():
     subprocess.run('coverage report -m'.split(' '), check=True)
 
 
-def main():
+def parse_args(command_dict: Dict[str, Callable]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog='python run.py', description='Run custom configurations.'
     )
-    parser.add_argument(
-        'command',
-        choices=['test', 'coverage'],
-    )
-    args = parser.parse_args()
+    parser.add_argument('command', choices=command_dict.keys())
+    return parser.parse_args()
 
+
+def main():
     command_dict = {
         'test': run_test,
         'coverage': run_coverage,
     }
+    args = parse_args(command_dict)
     command_dict[args.command]()
 
 

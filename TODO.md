@@ -1,44 +1,40 @@
 TODO List
 ==========
 
-> copy-paste SSIM usage from `binarization/vaccaro/train.py` into
-    `binarization/future_training.py`, you need to replace `piq.SSIMLoss`,
-    with the same function in vaccaro's `train.py` module.
 > remember to work on dev branch
 
 ## high priority
-- log lots of `piq.[metric]`, then:
-    - train with/without ssim
-    - understand why your way of including ssim was so bad for the training
-    - replace tensorflow with mlflow
+- log lots of `piq.[metric]` on validation:
 
-- A/B test with previous ssim loss
-- check structural reparametrization in DiracNets and RepVGG
+- train with/without ssim
+- understand why your way of including ssim was so bad for the training
+- replace tensorflow with mlflow
+
+- add timer
+- train SR-UNet, make it a parameter of choice between UNet and SRUNet
+- you need to log (1.) times, (2.) validation/training metrics, and (3.) config
 
 ---
 
 ## medium priority
-- resume from logging validation images original vs. generated
+- check structural reparametrization in DiracNets and RepVGG
+- resume from logging validation images original vs. generated (I don't remember what it's talking about)
 - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
-
-- as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
-    - (the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences)
-    - (this other one instead contains 772 sequences, and it is 83.8GB big)
-
-- use ./binarization/models/ to store each architecture in a single file
-- refactor CustomPyTorchDataset class:
-    - rename it ?
-    - use function composition
-    - extract a transform function removing all internal preprocessing
 - the Professor suggests Comet.ml, but I'll check mlflow since I'm using it at work
 
 ---
 
 ## low priority
+- refactor CustomPyTorchDataset class:
+    - rename it ?
+    - use function composition
+    - extract a transform function removing all internal preprocessing
 - pay attention in piq: LPIPS seems to yield different results than in the
     original implementation
 
 ---
+An alternative to the official BVI-DVC dataset can be found at [https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
+Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences, and this alternative contains only 772 sequences, and it is 83.8GB big.
 
 ## Videos from [Derf's collection](https://media.xiph.org/video/derf/) used
 by Vaccaro in his paper as an extra test dataset:
@@ -80,3 +76,9 @@ by Vaccaro in his paper as an extra test dataset:
 - DONE - log more info while training
 - DONE - solve GPU issue in Ubuntu 20.04 (Alienware)
 - DONE - replace the scaling 540 -> 512 (or 270 -> 256), with black bands
+- DONE - copy-paste SSIM usage from `binarization/vaccaro/train.py` into
+    `binarization/future_training.py`, you need to replace `piq.SSIMLoss`,
+    with the same function in vaccaro's `train.py` module.
+- DONE - as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
+    - (the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences)
+    - (this other one instead contains 772 sequences, and it is 83.8GB big)
