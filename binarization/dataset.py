@@ -1,17 +1,15 @@
-# TODO: refactor CustomPyTorchDataset using function composition
-
 import functools
 import itertools
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+import PIL
 import torch
 import torchvision.transforms.functional as F
 from gifnoc import Gifnoc
 from torch.utils.data import DataLoader, Dataset
-import PIL
 from torchvision.utils import Image
 
 
@@ -66,10 +64,18 @@ def draw_validation_fig(
     compressed_image_pil = F.to_pil_image(compressed_image)
     generated_image_pil = F.to_pil_image(generated_image)
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
-    ax1.imshow(original_image_pil); ax1.set_title('high quality'); ax1.axis('off')
-    ax2.imshow(generated_image_pil); ax2.set_title('reconstructed'); ax2.axis('off')
-    ax3.imshow(compressed_image_pil); ax3.set_title('low quality'); ax3.axis('off')
-    fig.subplots_adjust(top=1.0, bottom=0.0, right=1.0, left=0.0, hspace=0.0, wspace=0.0)
+    ax1.imshow(original_image_pil)
+    ax1.set_title('high quality')
+    ax1.axis('off')
+    ax2.imshow(generated_image_pil)
+    ax2.set_title('reconstructed')
+    ax2.axis('off')
+    ax3.imshow(compressed_image_pil)
+    ax3.set_title('low quality')
+    ax3.axis('off')
+    fig.subplots_adjust(
+        top=1.0, bottom=0.0, right=1.0, left=0.0, hspace=0.0, wspace=0.0
+    )
     return fig
 
 
@@ -78,13 +84,16 @@ def compose(*functions):
     return functools.reduce(lambda f, g: lambda x: g(f(x)), functions)
 
 
-def get_starting_random_position(x: int, patch_size: int) -> int:
-    """Random starting position on a given axis for a patch."""
-    res = 0
-    if x > patch_size:
-        x -= patch_size
-        res = np.random.randint(x)
-    return res
+def get_starting_random_position(
+    initial_position: int, patch_size: int
+) -> int:
+    """Chooses a random starting position on a given axis for a patch."""
+    random_position = 0
+    if initial_position > patch_size:
+        initial_position -= patch_size
+        random_position = np.random.randint(initial_position)
+    return random_position
+
 
 def crop_patches(
     compressed_image: PIL.Image.Image,
@@ -92,19 +101,28 @@ def crop_patches(
     patch_size: int,
     scale_factor: int,
 ) -> Tuple[PIL.Image.Image, PIL.Image.Image]:
-    w, h = compressed_image.size
-    a = get_starting_random_position(w, patch_size)
-    b = get_starting_random_position(h, patch_size)
+    """Randomly crops two images.
+
+    Crops at a random position `compressed_image`, taking a square
+    (`patch_size`, `patch_size`). Then it crops `original_image`
+    taking a square of dimensions:
+    (`patch_size` * `scale_factor`, `patch_size` * `scale_factor`).
+    """
+    width, height = compressed_image.size
+    random_width = get_starting_random_position(width, patch_size)
+    random_height = get_starting_random_position(height, patch_size)
+
     compressed_image_positions = (
-        a,
-        b,
-        a + patch_size,
-        b + patch_size,
+        random_width,
+        random_height,
+        random_width + patch_size,
+        random_height + patch_size,
     )
-    compressed_patch = compressed_image.crop(compressed_image_positions)
+    # scale positions
     original_image_positions = tuple(
         map(lambda x: x * scale_factor, compressed_image_positions)
     )
+    compressed_patch = compressed_image.crop(compressed_image_positions)
     original_patch = original_image.crop(original_image_positions)
     return compressed_patch, original_patch
 
@@ -165,15 +183,17 @@ def list_all_files_in_all_second_level_directories(
 
 
 def min_max_scaler(
-    x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0
+    tensor: torch.Tensor, tensor_min: float = 0.0, tensor_max: float = 255.0
 ) -> torch.Tensor:
-    return (x - x_min) / (x_max - x_min)
+    """Scales any value of a tensor between two given values."""
+    return (tensor - tensor_min) / (tensor_max - tensor_min)
 
 
 def inv_min_max_scaler(
-    x: torch.Tensor, x_min: float = 0.0, x_max: float = 255.0
+    tensor: torch.Tensor, tensor_min: float = 0.0, tensor_max: float = 255.0
 ) -> torch.Tensor:
-    return (x * (x_max - x_min) + x_min).int()
+    """Inverse of the min_max_scaler function"""
+    return (tensor * (tensor_max - tensor_min) + tensor_min).int()
 
 
 class CustomPyTorchDataset(Dataset):
@@ -181,7 +201,7 @@ class CustomPyTorchDataset(Dataset):
         self,
         original_frames_dir: Path,
         encoded_frames_dir: Path,
-        patch_size: int = 96,  # not sure about this initial value
+        patch_size: int = 96,
         training: bool = True,
         scale_factor: int = 4,
     ):
@@ -222,19 +242,6 @@ class CustomPyTorchDataset(Dataset):
         compressed_image = Image.open(self.encoded_filenames[i])
         original_image = Image.open(self.original_filenames[i])
 
-        if not self.training:
-            np.random.seed(42)
-            compressed_patch, original_patch = crop_patches(
-                compressed_image=compressed_image,
-                original_image=original_image,
-                patch_size=self.patch_size,
-                scale_factor=self.scale_factor,
-            )
-            return (
-                min_max_scaler(F.pil_to_tensor(compressed_patch)),
-                min_max_scaler(F.pil_to_tensor(original_patch)),
-            )
-
         compressed_patch, original_patch = crop_patches(
             compressed_image=compressed_image,
             original_image=original_image,
@@ -242,21 +249,9 @@ class CustomPyTorchDataset(Dataset):
             scale_factor=self.scale_factor,
         )
 
-        # original_image = original_image.resize((
-        #     int(upscaling_factor * self.patch_size),
-        #     int(upscaling_factor * self.patch_size)
-        # ))
-
         if np.random.random() < 0.5:
             compressed_patch = F.hflip(compressed_patch)
             original_patch = F.hflip(original_patch)
-
-        # custom_transform = torchvision.transforms.Compose([
-        #     torchvision.transforms.ToTensor(),
-        #     lambda x: (x - 0.5) * 2.0,
-        # ])
-
-        # compressed_image, original_image = custom_transform(compressed_image), custom_transform(original_image)
 
         return (
             min_max_scaler(F.pil_to_tensor(compressed_patch)),
