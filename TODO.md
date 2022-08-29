@@ -2,9 +2,16 @@ TODO List
 ==========
 
 > remember to work on dev branch
+    until you have finished to work with vaccaro's repo,
+    then you should create a branch for each feature that you
+    would like to implement. Maybe it's worth a check online
+    for tools like Jira, but free and easier to use
+
 
 ## high priority
-- log lots of `piq.[metric]` on validation:
+- add more `piq.[metric]` on validation step in `future_training.py`
+- rename `future_training.py` -> `train.py`
+    Also, in scripts/eval.py you have to change the relative import
 
 - train with/without ssim
 - understand why your way of including ssim was so bad for the training
