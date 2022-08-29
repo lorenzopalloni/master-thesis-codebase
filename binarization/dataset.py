@@ -259,67 +259,49 @@ class CustomPyTorchDataset(Dataset):
         )
 
 
-def make_train_dataloader(
-    original_frames_dir: Path,
-    encoded_frames_dir: Path,
-    patch_size: int,
-    batch_size: int,
-    num_workers: int,
-) -> DataLoader:
+def make_train_dataloader(cfg: Gifnoc) -> DataLoader:
     dataset = CustomPyTorchDataset(
-        original_frames_dir=original_frames_dir,
-        encoded_frames_dir=encoded_frames_dir,
-        patch_size=patch_size,
+        original_frames_dir=cfg.paths.train_original_frames_dir,
+        encoded_frames_dir=cfg.paths.train_encoded_frames_dir,
+        patch_size=cfg.params.patch_size,
         training=True,
     )
     return DataLoader(
         dataset=dataset,
-        batch_size=batch_size,
-        num_workers=num_workers,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
         shuffle=True,
         pin_memory=True,
     )
 
 
-def make_val_dataloader(
-    original_frames_dir: Path,
-    encoded_frames_dir: Path,
-    patch_size: int,
-    batch_size: int,
-    num_workers: int,
-) -> DataLoader:
+def make_val_dataloader(cfg: Gifnoc) -> DataLoader:
     dataset = CustomPyTorchDataset(
-        original_frames_dir=original_frames_dir,
-        encoded_frames_dir=encoded_frames_dir,
-        patch_size=patch_size,
+        original_frames_dir=cfg.paths.val_original_frames_dir,
+        encoded_frames_dir=cfg.paths.val_encoded_frames_dir,
+        patch_size=cfg.params.patch_size,
         training=False,
     )
     return DataLoader(
         dataset=dataset,
-        batch_size=batch_size,
-        num_workers=num_workers,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
         shuffle=False,
         pin_memory=True,
     )
 
 
-def make_test_dataloader(
-    original_frames_dir: Path,
-    encoded_frames_dir: Path,
-    patch_size: int,
-    batch_size: int,
-    num_workers: int,
-) -> DataLoader:
+def make_test_dataloader(cfg: Gifnoc) -> DataLoader:
     dataset = CustomPyTorchDataset(
-        original_frames_dir=original_frames_dir,
-        encoded_frames_dir=encoded_frames_dir,
-        patch_size=patch_size,
+        original_frames_dir=cfg.paths.test_original_frames_dir,
+        encoded_frames_dir=cfg.paths.test_encoded_frames_dir,
+        patch_size=cfg.params.patch_size,
         training=False,
     )
     return DataLoader(
         dataset=dataset,
-        batch_size=batch_size,
-        num_workers=num_workers,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
         shuffle=False,
         pin_memory=True,
     )
@@ -329,27 +311,9 @@ def make_dataloaders(
     cfg: Gifnoc,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     return (
-        make_train_dataloader(
-            original_frames_dir=cfg.paths.train_original_frames_dir,
-            encoded_frames_dir=cfg.paths.train_encoded_frames_dir,
-            patch_size=cfg.params.patch_size,
-            batch_size=cfg.params.batch_size,
-            num_workers=cfg.params.num_workers,
-        ),
-        make_val_dataloader(
-            original_frames_dir=cfg.paths.val_original_frames_dir,
-            encoded_frames_dir=cfg.paths.val_encoded_frames_dir,
-            patch_size=cfg.params.patch_size,
-            batch_size=cfg.params.batch_size,
-            num_workers=cfg.params.num_workers,
-        ),
-        make_test_dataloader(
-            original_frames_dir=cfg.paths.test_original_frames_dir,
-            encoded_frames_dir=cfg.paths.test_encoded_frames_dir,
-            patch_size=cfg.params.patch_size,
-            batch_size=cfg.params.batch_size,
-            num_workers=cfg.params.num_workers,
-        ),
+        make_train_dataloader(cfg),
+        make_val_dataloader(cfg),
+        make_test_dataloader(cfg),
     )
 
 
