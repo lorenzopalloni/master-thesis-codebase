@@ -9,10 +9,6 @@ TODO List
 
 
 ## high priority
-- add more `piq.[metric]` on validation step in `future_training.py`
-- rename `future_training.py` -> `train.py`
-    Also, in scripts/eval.py you have to change the relative import
-
 - train with/without ssim
 - understand why your way of including ssim was so bad for the training
 - replace tensorflow with mlflow
@@ -89,3 +85,7 @@ by Vaccaro in his paper as an extra test dataset:
 - DONE - as soon as you got the Wi-Fi, download the dataset from [here](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
     - (the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences)
     - (this other one instead contains 772 sequences, and it is 83.8GB big)
+- DONE - complete eval.py script, need a way to show progress/results
+- DONE - add more `piq.[metric]` on validation step in `future_training.py`
+- DONE - rename `future_training.py` -> `train.py`
+

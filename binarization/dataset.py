@@ -39,7 +39,7 @@ def compute_adjusted_dimension(an_integer: int) -> int:
 
 def adjust_image_for_unet(image: torch.Tensor) -> torch.Tensor:
     """Pad until image height and width are divisible by 2 at least 4 times"""
-    _, height, width = image.shape
+    height, width = image.shape[-2], image.shape[-1]
     adjusted_height = compute_adjusted_dimension(height)
     adjusted_width = compute_adjusted_dimension(width)
     return F.pad(
@@ -164,7 +164,7 @@ def list_directories(path: Path, sort_result: bool = True) -> List[Path]:
     return res
 
 
-def list_all_files_in_all_second_level_directories(
+def list_files_in_sub_dirs(
     path: Path, extension: str = '.jpg', sort_result: bool = True
 ) -> List[Path]:
     """List all files in the second level directories of the given path.
@@ -172,10 +172,10 @@ def list_all_files_in_all_second_level_directories(
     By default, the result is provided in lexicographic order.
     """
     res = itertools.chain.from_iterable(
-        [
+        (
             list_files(i_dir, extension, sort_result=False)
             for i_dir in list_directories(path)
-        ]
+        )
     )
     if sort_result:
         return sorted(res)
@@ -196,6 +196,55 @@ def inv_min_max_scaler(
     return (tensor * (tensor_max - tensor_min) + tensor_min).int()
 
 
+class WholeImagesDataset(Dataset):
+    def __init__(
+        self,
+        original_frames_dir: Path,
+        encoded_frames_dir: Path,
+        training: bool = False,
+        scale_factor: int = 4,
+    ):
+        """Custom PyTorch Dataset loader for the training phase. Yield a pair
+        (x, y), where x is the encoded version of the original image y.
+
+        Args:
+            original_frames_dir (Union[Path, str]): Original frames directory.
+            encoded_frames_dir (Union[Path, str]): Encoded frames directory.
+            training (bool, optional): Flag for training vs evaluation phase.
+                Defaults to False.
+            scale_factor (Optional[int]): Scale factor between original and
+                encoded frames. Defaults to 4, this means that original frames
+                have a 4:1 resolution ratio compared to encoded frames.
+        """
+        self.training = training
+        self.original_filenames = list_files_in_sub_dirs(
+            Path(original_frames_dir)
+        )
+        self.encoded_filenames = list_files_in_sub_dirs(
+            Path(encoded_frames_dir)
+        )
+        self.num_examples = len(self.original_filenames)
+        self.scale_factor = scale_factor
+
+    def __len__(self):
+        return self.num_examples
+
+    def __getitem__(self, i):
+
+        compressed_image = Image.open(self.encoded_filenames[i])
+        original_image = Image.open(self.original_filenames[i])
+
+        if self.training:
+            if np.random.random() < 0.5:
+                compressed_image = F.hflip(compressed_image)
+                original_image = F.hflip(original_image)
+
+        return (
+            min_max_scaler(F.pil_to_tensor(compressed_image)),
+            min_max_scaler(F.pil_to_tensor(original_image)),
+        )
+
+
 class CustomPyTorchDataset(Dataset):
     def __init__(
         self,
@@ -214,22 +263,18 @@ class CustomPyTorchDataset(Dataset):
             patch_size (int): Width/height of a training patch.
                 A training patch will be choosen at random from a given frame.
             training (bool, optional): Flag for training vs evaluation phase.
-                Defaults to False.
+                Defaults to True.
             scale_factor (Optional[int]): Scale factor between original and
                 encoded frames. Defaults to 4, this means that original frames
                 have a 4:1 resolution ratio compared to encoded frames.
         """
         self.patch_size = patch_size
         self.training = training
-        self.original_filenames = (
-            list_all_files_in_all_second_level_directories(
-                Path(original_frames_dir)
-            )
+        self.original_filenames = list_files_in_sub_dirs(
+            Path(original_frames_dir)
         )
-        self.encoded_filenames = (
-            list_all_files_in_all_second_level_directories(
-                Path(encoded_frames_dir)
-            )
+        self.encoded_filenames = list_files_in_sub_dirs(
+            Path(encoded_frames_dir)
         )
         self.num_examples = len(self.original_filenames)
         self.scale_factor = scale_factor

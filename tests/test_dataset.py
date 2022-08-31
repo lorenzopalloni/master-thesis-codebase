@@ -172,9 +172,7 @@ class TestListAllFiles:
             video2_0001_fn,
             video2_0002_fn,
         ]
-        actual = dataset.list_all_files_in_all_second_level_directories(
-            original_frames_dir
-        )
+        actual = dataset.list_files_in_sub_dirs(original_frames_dir)
         assert dataset.lists_have_same_elements(expected, actual)
 
 
@@ -224,3 +222,7 @@ def test_compute_adjusted_dimension():
     assert dataset.compute_adjusted_dimension(256) == 256
     assert dataset.compute_adjusted_dimension(270) == 288
     assert dataset.compute_adjusted_dimension(540) == 544
+
+
+def test_adjust_image_for_unet():
+    ...

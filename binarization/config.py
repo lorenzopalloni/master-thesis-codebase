@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
 from gifnoc import Gifnoc
 
 
@@ -34,6 +35,7 @@ class ParamsConfig:
 class PathsConfig:
     project_dir: Path = Path(__file__).parent.parent
     artifacts_dir: Path = project_dir / "artifacts"
+    outputs_dir: Path = project_dir / "outputs"
     data_dir: Path = project_dir / "data"
     train_dir: Path = data_dir / "train"
     val_dir: Path = data_dir / "val"
@@ -55,8 +57,6 @@ class DefaultConfig:
 default_config = Gifnoc.from_dataclass(DefaultConfig())
 
 if __name__ == "__main__":
-    from gifnoc import Gifnoc
-
     paths = PathsConfig()
     print(paths)
     print(Gifnoc.from_dataclass(paths))
