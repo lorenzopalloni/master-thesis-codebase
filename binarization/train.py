@@ -1,14 +1,12 @@
-"""Training module"""
+"""Module to train a super-resolution model"""
 
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import lpips
 import piq
 import torch
-import torchvision.transforms.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -30,7 +28,7 @@ def set_up_artifacts_dirs(artifacts_dir: Path) -> Tuple[Path, Path]:
     return checkpoints_dir, runs_dir
 
 
-def get_unet(cfg: Gifnoc) -> models.UNet:
+def set_up_unet(cfg: Gifnoc) -> models.UNet:
     """Instantiates a UNet, resuming model weights if provided"""
     generator = models.UNet(
         num_filters=cfg.params.unet.num_filters,
@@ -44,23 +42,19 @@ def get_unet(cfg: Gifnoc) -> models.UNet:
     return generator
 
 
-def process_raw_generated(raw_generated, original):
-    """Postprocesses outputs from super-resolution generator models"""
-    out = raw_generated.cpu()
-    out = out.cpu()
-    out = dataset.inv_min_max_scaler(out)
-    out = out.clip(0, 255)
-    out = out.squeeze()
-    out = out / 255.0
-    out = F.crop(out, 0, 0, original.shape[-2], original.shape[-1])
-    return out
+def get_starting_epoch_id(ckpt_path_to_resume: Path) -> int:
+    """Extract the epoch id from the ckpt resuming path, if possible"""
+    try:
+        return int(Path(ckpt_path_to_resume).stem.split('_')[-1]) + 1
+    except (ValueError, TypeError):
+        return 0
 
 
 def main(cfg: Gifnoc):
     """Main for training a model for super-resolution"""
     checkpoints_dir, runs_dir = set_up_artifacts_dirs(cfg.paths.artifacts_dir)
     tensorboard_logger = SummaryWriter(log_dir=runs_dir)
-    gen = get_unet(cfg=cfg)
+    gen = set_up_unet(cfg=cfg)
     dis = models.Discriminator()
 
     gen_optim = torch.optim.Adam(lr=cfg.params.gen_lr, params=gen.parameters())
@@ -81,9 +75,11 @@ def main(cfg: Gifnoc):
     dl_train, dl_val, dl_test = dataset.make_dataloaders(cfg=cfg)
 
     global_step_id = 0
-    for epoch_id in range(cfg.params.num_epochs):
+
+    starting_epoch_id = get_starting_epoch_id(cfg.params.ckpt_path_to_resume)
+    for epoch_id in range(starting_epoch_id, cfg.params.num_epochs):
         progress_bar_train = tqdm(dl_train, total=cfg.params.limit_train_batches)
-        for step_id_train, (compressed_patches, original_patches) in enumerate(progress_bar_train):
+        for step_id_train, (compressed, original) in enumerate(progress_bar_train):
             # training_step - START
             ##################################################################
             if (cfg.params.limit_train_batches is not None and step_id_train > cfg.params.limit_train_batches):
@@ -95,14 +91,14 @@ def main(cfg: Gifnoc):
             ##################################################################
             dis_optim.zero_grad()
 
-            compressed_patches = compressed_patches.to(device)
-            original_patches = original_patches.to(device)
-            generated_patches = gen(compressed_patches)
-            pred_original_patches = dis(original_patches)
+            compressed = compressed.to(device)
+            original = original.to(device)
+            generated = gen(compressed)  # maybe clip it in [0, 1]
+            pred_original = dis(original)
 
-            loss_true = bce_loss_op(pred_original_patches, torch.ones_like(pred_original_patches))
-            pred_generated_patches = dis(generated_patches.detach())
-            loss_fake = bce_loss_op(pred_generated_patches, torch.zeros_like(pred_generated_patches))
+            loss_true = bce_loss_op(pred_original, torch.ones_like(pred_original))
+            pred_generated = dis(generated.detach())
+            loss_fake = bce_loss_op(pred_generated, torch.zeros_like(pred_generated))
 
             loss_dis = (loss_true + loss_fake) * 0.5
 
@@ -115,25 +111,10 @@ def main(cfg: Gifnoc):
             ##################################################################
             gen_optim.zero_grad()
 
-            loss_lpips = lpips_vgg_loss_op(generated_patches, original_patches).mean()
-
-            # x_min = min(
-            #     generated_patches.min(), original_patches.min()
-            # )
-            # x_max = max(
-            #     generated_patches.max(), original_patches.max()
-            # )
-            # loss_ssim = 1.0 - ssim_op(
-            #     dataset.min_max_scaler(
-            #         generated_patches, x_min, x_max
-            #     ),
-            #     dataset.min_max_scaler(original_patches, x_min, x_max),
-            # )
-
-            loss_ssim = 1.0 - ssim_op(generated_patches, original_patches)
-
-            pred_generated_patches = dis(generated_patches)
-            loss_bce = bce_loss_op(pred_generated_patches, torch.ones_like(pred_generated_patches))
+            loss_lpips = lpips_vgg_loss_op(generated, original).mean()
+            loss_ssim = 1.0 - ssim_op(generated, original)
+            pred_generated = dis(generated)
+            loss_bce = bce_loss_op(pred_generated, torch.ones_like(pred_generated))
             loss_gen = (
                 cfg.params.w0 * loss_lpips
                 + cfg.params.w1 * loss_ssim
@@ -145,46 +126,40 @@ def main(cfg: Gifnoc):
             ##################################################################
             # Generator training step - END
 
-            # Log statistics on training set - START
-            ##################################################################
             progress_bar_train.set_description(
                 f'Epoch #{epoch_id} - '
-                f'Loss dis: {float(loss_dis):.8f}; '
-                f'Loss gen: {float(loss_gen):.4f} = '
-                f'w0 * {float(loss_lpips):.4f}'
-                f' + w1 * {float(loss_ssim):.4f}'
-                f' + w2 * {float(loss_bce):.4f})'
+                f'loss_dis: {loss_dis.item():.8f} - '
+                f'loss_gen: {loss_gen.item():.4f}'
             )
-            tensorboard_logger.add_scalar('lossD', scalar_value=loss_dis, global_step=global_step_id)
-            tensorboard_logger.add_scalar('lossG', scalar_value=loss_gen, global_step=global_step_id)
-            # tensorboard_logger.add_image('output_example', img_tensor=<insert-image-here>, global_step=epoch_id * step_id)
-            ##################################################################
-            # Log statistics on training set - END
+            tensorboard_logger.add_scalar('loss_dis', scalar_value=loss_dis, global_step=global_step_id)
+            tensorboard_logger.add_scalar('loss_gen', scalar_value=loss_gen, global_step=global_step_id)
+            tensorboard_logger.add_scalar('loss_lpips', scalar_value=loss_lpips, global_step=global_step_id)
+            tensorboard_logger.add_scalar('loss_ssim', scalar_value=loss_ssim, global_step=global_step_id)
+            tensorboard_logger.add_scalar('loss_bce', scalar_value=loss_bce, global_step=global_step_id)
 
             global_step_id += 1
             ##################################################################
             # training_step - END
 
         progress_bar_val = tqdm(dl_val, total=cfg.params.limit_val_batches)
-        for step_id_val, (compressed_patches_val, original_patches_val) in enumerate(progress_bar_val):
+        for step_id_val, (compressed_val, original_val) in enumerate(progress_bar_val):
             # validation_step - START
             ##################################################################
             if (cfg.params.limit_val_batches is not None and step_id_val > cfg.params.limit_val_batches):
                 break
-
-            metrics: Dict[str, List[float]] = defaultdict(list)
-
-            compressed_patches_val.to(device)
-            original_patches_val.to(device)
-
+            compressed_val = compressed_val.to(device)
+            original_val = original_val.to(device)
+            metrics: Dict[str, float] = {}
             gen.eval()
             with torch.no_grad():
-                generated_patches_val = gen(compressed_patches_val)
-                metrics['lpips_alex'] = lpips_alex_metric_op(generated_patches_val, original_patches_val)
-                metrics['ssim'] = ssim_op(generated_patches_val, original_patches_val)
-
-            for metric in metrics:
-                tensorboard_logger.add_scalar(f'{metric}_val', sum(metrics[metric]) / len(metrics[metric]), global_step=global_step_id)
+                generated_val = gen(compressed_val).clip(0, 1)
+                metrics['lpips_alex'] = lpips_alex_metric_op(generated_val, original_val).mean().item()
+                metrics['ssim'] = ssim_op(generated_val, original_val).item()
+                metrics['psnr'] = piq.psnr(generated_val, original_val).item()
+                metrics['ms_ssim'] = piq.multi_scale_ssim(generated_val, original_val).item()
+                metrics['brisque'] = piq.brisque(generated_val).item()
+            for metric_name, metric_value in metrics.items():
+                tensorboard_logger.add_scalar(f'{metric_name}_val', metric_value, global_step=epoch_id * progress_bar_val.total + step_id_val)
             ##################################################################
             # validation_epoch_end - END
 
@@ -197,8 +172,8 @@ def main(cfg: Gifnoc):
 
 
 if __name__ == "__main__":
-    default_config.params.limit_train_batches = 4
-    default_config.params.limit_val_batches = 4
-    default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_27_epoch_7.pth')
+    default_config.params.limit_train_batches = None
+    default_config.params.limit_val_batches = None
+    default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth')
 
     main(default_config)
