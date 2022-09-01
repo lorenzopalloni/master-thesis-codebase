@@ -13,9 +13,16 @@ from binarization.config import Gifnoc, default_config
 def inv_adjust_image_for_unet(
     generated: torch.Tensor, original: torch.Tensor
 ) -> torch.Tensor:
-    hy, wy = generated.shape[-2], generated.shape[-1]
-    hx, wx = original.shape[-2], original.shape[-1]
-    return F.crop(generated, (hy - hx) // 2, (wy - wx) // 2, hx, wx)
+    height_generated, width_generated = (
+        generated.shape[-2],
+        generated.shape[-1],
+    )
+    height_original, width_original = original.shape[-2], original.shape[-1]
+    height_offset = (height_generated - height_original) // 2
+    width_offset = (width_generated - width_original) // 2
+    return F.crop(
+        generated, height_offset, width_offset, height_original, width_original
+    )
 
 
 def process_raw_generated(
