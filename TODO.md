@@ -1,6 +1,14 @@
 TODO List
 ==========
 
+
+> next checkpoint's agenda:
+        1. workstation availability
+        2. show recent logs in tensorboard: are these metrics enough?
+        3. add timer on eval.py (images)? Or write an eval for video and time that one?
+        4. train SR-UNet and compare with UNet
+        5. binarization ?
+
 > remember to work on dev branch
     until you have finished to work with vaccaro's repo,
     then you should create a branch for each feature that you
@@ -11,11 +19,14 @@ TODO List
 ## high priority
 - train with/without ssim
 - understand why your way of including ssim was so bad for the training
-- replace tensorflow with mlflow
 
-- add timer
+- things to be implemented:
+    (1.) timer
+    (2.) train/val metrics
+    (3.) evaluation for whole images
+    (4.) log config for each experiment
 - train SR-UNet, make it a parameter of choice between UNet and SRUNet
-- you need to log (1.) times, (2.) validation/training metrics, and (3.) config
+- replace tensorboard with mlflow
 
 ---
 
