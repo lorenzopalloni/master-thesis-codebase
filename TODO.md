@@ -1,13 +1,7 @@
 TODO List
 ==========
 
-
 > next checkpoint's agenda:
-        1. workstation availability
-        2. show recent logs in tensorboard: are these metrics enough?
-        3. add timer on eval.py (images)? Or write an eval for video and time that one?
-        4. train SR-UNet and compare with UNet
-        5. binarization ?
 
 > remember to work on dev branch
     until you have finished to work with vaccaro's repo,
@@ -15,26 +9,25 @@ TODO List
     would like to implement. Maybe it's worth a check online
     for tools like Jira, but free and easier to use
 
-
 ## high priority
+- implement a way to log config
+- implement a way to log metrics
+
+- ask by email Marco about ws access
+- set up ws
+- download BVI-DVC on ws
+- train UNet with BVI-DVC
+- train SR-UNet with BVI-DVC
 - train with/without ssim
+
 - understand why your way of including ssim was so bad for the training
-
-- things to be implemented:
-    (1.) timer
-    (2.) train/val metrics
-    (3.) evaluation for whole images
-    (4.) log config for each experiment
-- train SR-UNet, make it a parameter of choice between UNet and SRUNet
-- replace tensorboard with mlflow
-
 ---
 
 ## medium priority
+- replace tensorboard with mlflow
 - check structural reparametrization in DiracNets and RepVGG
-- resume from logging validation images original vs. generated (I don't remember what it's talking about)
 - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
-- the Professor suggests Comet.ml, but I'll check mlflow since I'm using it at work
+- the Professor suggests Comet.ml, but I'll check mlflow also since I'm using it at work
 
 ---
 
