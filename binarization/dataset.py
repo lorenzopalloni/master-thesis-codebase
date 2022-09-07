@@ -1,59 +1,147 @@
-import itertools
 import functools
+import itertools
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Tuple
 
-import torch
-import torchvision
+import matplotlib.pyplot as plt
 import numpy as np
+import PIL
+import torch
+import torchvision.transforms.functional as F
+from gifnoc import Gifnoc
+from torch.utils.data import DataLoader, Dataset
+from torchvision.utils import Image
+
+
+def compute_adjusted_dimension(an_integer: int) -> int:
+    """Given an integer `an_integer`, return another integer that:
+    - is greater than `an_integer`
+    - is divisible at least four times by 2
+    - is the closest to `an_integer`
+
+    Useful for adapting the size of an image to feed a UNet-like architecture.
+
+    Args:
+        an_integer (int): an integer greater than 0.
+
+    Returns:
+        int: an integer with the properties described above.
+    """
+    assert (
+        an_integer > 0
+    ), f"Input should be > 0, but `{an_integer}` was provided."
+    if an_integer % 2 != 0:
+        an_integer += 1
+    while an_integer / 2**4 % 2 != 0:
+        an_integer += 2
+    return an_integer
+
+
+def adjust_image_for_unet(image: torch.Tensor) -> torch.Tensor:
+    """Pad until image height and width are divisible by 2 at least 4 times"""
+    height, width = image.shape[-2], image.shape[-1]
+    adjusted_height = compute_adjusted_dimension(height)
+    adjusted_width = compute_adjusted_dimension(width)
+    return F.pad(
+        image,
+        padding=[
+            (adjusted_width - width) // 2,  # left/right
+            (adjusted_height - height) // 2,  # top/bottom
+        ],
+    )
+
+
+def draw_validation_fig(
+    original_image: torch.Tensor,
+    compressed_image: torch.Tensor,
+    generated_image: torch.Tensor,
+    figsize: Tuple[int, int] = (12, 5),
+) -> plt.Figure:
+    """Draw a matplotlib figure useful for validating the training process
+    of a representation model.
+    """
+    original_image_pil = F.to_pil_image(original_image)
+    compressed_image_pil = F.to_pil_image(compressed_image)
+    generated_image_pil = F.to_pil_image(generated_image)
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
+    ax1.imshow(original_image_pil)
+    ax1.set_title('high quality')
+    ax1.axis('off')
+    ax2.imshow(generated_image_pil)
+    ax2.set_title('reconstructed')
+    ax2.axis('off')
+    ax3.imshow(compressed_image_pil)
+    ax3.set_title('low quality')
+    ax3.axis('off')
+    fig.subplots_adjust(
+        top=1.0, bottom=0.0, right=1.0, left=0.0, hspace=0.0, wspace=0.0
+    )
+    return fig
 
 
 def compose(*functions):
-    """Allow to easily compose several functions together"""
+    """Compose several functions together."""
     return functools.reduce(lambda f, g: lambda x: g(f(x)), functions)
 
 
-def get_starting_random_position(x: int, patch_size: int) -> int:
-    """Random starting position on a given axis for a patch."""
-    res = 0
-    if x > patch_size:
-        x -= patch_size
-        res = np.random.randint(x)
-    return res
+def get_starting_random_position(
+    initial_position: int, patch_size: int
+) -> int:
+    """Chooses a random starting position on a given axis for a patch."""
+    random_position = 0
+    if initial_position > patch_size:
+        initial_position -= patch_size
+        random_position = np.random.randint(initial_position)
+    return random_position
 
 
-def index_handler(
-    i: int, train_size: int, val_size: int, training: bool
-) -> Union[int, ValueError]:
-    if train_size == 0:
-        raise ValueError('Empty training set.')
-    if val_size == 0:
-        raise ValueError('Empty validation set.')
-    if training:
-        return i % train_size
-    return train_size + i % val_size
+def crop_patches(
+    compressed_image: PIL.Image.Image,
+    original_image: PIL.Image.Image,
+    patch_size: int,
+    scale_factor: int,
+) -> Tuple[PIL.Image.Image, PIL.Image.Image]:
+    """Randomly crops two images.
+
+    Crops at a random position `compressed_image`, taking a square
+    (`patch_size`, `patch_size`). Then it crops `original_image`
+    taking a square of dimensions:
+    (`patch_size` * `scale_factor`, `patch_size` * `scale_factor`).
+    """
+    width, height = compressed_image.size
+    random_width = get_starting_random_position(width, patch_size)
+    random_height = get_starting_random_position(height, patch_size)
+
+    compressed_image_positions = (
+        random_width,
+        random_height,
+        random_width + patch_size,
+        random_height + patch_size,
+    )
+    # scale positions
+    original_image_positions = tuple(
+        map(lambda x: x * scale_factor, compressed_image_positions)
+    )
+    compressed_patch = compressed_image.crop(compressed_image_positions)
+    original_patch = original_image.crop(original_image_positions)
+    return compressed_patch, original_patch
 
 
-def get_train_and_val_sizes(n: int, train_pct: float = 0.8) -> Tuple[int, int]:
-    train_size = int(round(n * train_pct, 0))
-    val_size = n - train_size
-    return train_size, val_size
-
-
-def lists_have_same_elements(a: List, b: List) -> bool:
-    set_a = set(a)
-    set_b = set(b)
-    if len(set_a) != len(set_b):
+def lists_have_same_elements(a_list: List, another_list: List) -> bool:
+    """Assure that two given lists have the same elements."""
+    a_set = set(a_list)
+    another_set = set(another_list)
+    if len(a_set) != len(another_set):
         return False
-    return len(set_a.difference(set_b)) == 0
+    return len(a_set.difference(another_set)) == 0
 
 
 def list_files(
-    path: Union[Path, str], extension: str = '.jpg', sort_result: bool = True
+    path: Path, extension: str = '.jpg', sort_result: bool = True
 ) -> List[Path]:
     """List files in a given directory with the same extension.
 
-    By default the result is provided in lexicographic order.
+    By default, the result is provided in lexicographic order.
     """
     res = [
         x
@@ -65,12 +153,10 @@ def list_files(
     return res
 
 
-def list_directories(
-    path: Union[Path, str], sort_result: bool = True
-) -> List[Path]:
+def list_directories(path: Path, sort_result: bool = True) -> List[Path]:
     """List all the directories in a given path.
 
-    By default the result is provided in lexicographic order.
+    By default, the result is provided in lexicographic order.
     """
     res = [x for x in path.iterdir() if x.is_dir()]
     if sort_result:
@@ -78,33 +164,95 @@ def list_directories(
     return res
 
 
-def list_all_files_in_all_second_level_directories(
-    path: Union[Path, str], extension: str = '.jpg', sort_result: bool = True
+def list_files_in_sub_dirs(
+    path: Path, extension: str = '.jpg', sort_result: bool = True
 ) -> List[Path]:
     """List all files in the second level directories of the given path.
 
-    path. By default the result is provided in lexicographic order.
+    By default, the result is provided in lexicographic order.
     """
     res = itertools.chain.from_iterable(
-        [
+        (
             list_files(i_dir, extension, sort_result=False)
             for i_dir in list_directories(path)
-        ]
+        )
     )
     if sort_result:
         return sorted(res)
-    return res
+    return list(res)
 
 
-class CustomPyTorchDataset(torch.utils.data.Dataset):
+def min_max_scaler(
+    tensor: torch.Tensor, tensor_min: float = 0.0, tensor_max: float = 255.0
+) -> torch.Tensor:
+    """Scales any value of a tensor between two given values."""
+    return (tensor - tensor_min) / (tensor_max - tensor_min)
+
+
+def inv_min_max_scaler(
+    tensor: torch.Tensor, tensor_min: float = 0.0, tensor_max: float = 255.0
+) -> torch.Tensor:
+    """Inverse of the min_max_scaler function"""
+    return (tensor * (tensor_max - tensor_min) + tensor_min).int()
+
+
+class WholeImagesDataset(Dataset):
     def __init__(
         self,
-        original_frames_dir: Union[Path, str],
-        encoded_frames_dir: Union[Path, str],
-        patch_size: int = 96,  # not sure about this initial value
+        original_frames_dir: Path,
+        encoded_frames_dir: Path,
+        training: bool = False,
+        scale_factor: int = 4,
+    ):
+        """Custom PyTorch Dataset loader for the training phase. Yield a pair
+        (x, y), where x is the encoded version of the original image y.
+
+        Args:
+            original_frames_dir (Union[Path, str]): Original frames directory.
+            encoded_frames_dir (Union[Path, str]): Encoded frames directory.
+            training (bool, optional): Flag for training vs evaluation phase.
+                Defaults to False.
+            scale_factor (Optional[int]): Scale factor between original and
+                encoded frames. Defaults to 4, this means that original frames
+                have a 4:1 resolution ratio compared to encoded frames.
+        """
+        self.training = training
+        self.original_filenames = list_files_in_sub_dirs(
+            Path(original_frames_dir)
+        )
+        self.encoded_filenames = list_files_in_sub_dirs(
+            Path(encoded_frames_dir)
+        )
+        self.num_examples = len(self.original_filenames)
+        self.scale_factor = scale_factor
+
+    def __len__(self):
+        return self.num_examples
+
+    def __getitem__(self, i):
+
+        compressed_image = Image.open(self.encoded_filenames[i])
+        original_image = Image.open(self.original_filenames[i])
+
+        if self.training:
+            if np.random.random() < 0.5:
+                compressed_image = F.hflip(compressed_image)
+                original_image = F.hflip(original_image)
+
+        return (
+            min_max_scaler(F.pil_to_tensor(compressed_image)),
+            min_max_scaler(F.pil_to_tensor(original_image)),
+        )
+
+
+class CustomPyTorchDataset(Dataset):
+    def __init__(
+        self,
+        original_frames_dir: Path,
+        encoded_frames_dir: Path,
+        patch_size: int = 96,
         training: bool = True,
-        train_pct: float = 0.8,
-        upscaling_factor: float = 2.0,
+        scale_factor: int = 4,
     ):
         """Custom PyTorch Dataset loader for the training phase. Yield a pair
         (x, y), where x is the encoded version of the original image y.
@@ -114,67 +262,105 @@ class CustomPyTorchDataset(torch.utils.data.Dataset):
             encoded_frames_dir (Union[Path, str]): Encoded frames directory.
             patch_size (int): Width/height of a training patch.
                 A training patch will be choosen at random from a given frame.
-            eval (bool, optional): Training vs evaluation phase.
-                Defaults to False.
-            train_pct (float, optional): Percentage of training data.
-                Defaults to 0.8. Random portion of the whole data used
-                for training. The remaining (1 - `train_pct`) of the data
-                will be used as validation.
-            upscaling_factor (float, optional):
-                Upscaling factor between original and encoded frames.
-                Defaults to 2, this means that original frames have a 2:1
-                resolution ratio compared to encoded frames.
+            training (bool, optional): Flag for training vs evaluation phase.
+                Defaults to True.
+            scale_factor (Optional[int]): Scale factor between original and
+                encoded frames. Defaults to 4, this means that original frames
+                have a 4:1 resolution ratio compared to encoded frames.
         """
         self.patch_size = patch_size
         self.training = training
-        self.train_pct = train_pct
-
-        self.original_filenames = (
-            list_all_files_in_all_second_level_directories(
-                original_frames_dir
-            )
+        self.original_filenames = list_files_in_sub_dirs(
+            Path(original_frames_dir)
         )
-        self.encoded_filenames = (
-            list_all_files_in_all_second_level_directories(
-                encoded_frames_dir
-            )
+        self.encoded_filenames = list_files_in_sub_dirs(
+            Path(encoded_frames_dir)
         )
         self.num_examples = len(self.original_filenames)
-        self.train_size, self.val_size = get_train_and_val_sizes(
-            self.num_examples, self.train_pct
-        )
-        self.val_size = self.num_examples - self.train_size
-        self.upscaling_factor = upscaling_factor
+        self.scale_factor = scale_factor
 
     def __len__(self):
-        return self.train_size if not self.eval else self.val_size
+        return self.num_examples
 
     def __getitem__(self, i):
-        i = index_handler(i, self.train_size, self.val_size, self.training)
 
-        hq = torchvision.utils.Image.open(self.original_filenames[i])
-        lq = torchvision.utils.Image.open(self.encoded_filenames[i])
+        compressed_image = Image.open(self.encoded_filenames[i])
+        original_image = Image.open(self.original_filenames[i])
 
-        w, h = lq.size
-
-        a = get_starting_random_position(w, self.patch_size)
-        b = get_starting_random_position(h, self.patch_size)
-        upscaling_factor = 2.0
-        hq_positions = (a, b, a + self.patch_size, b + self.patch_size)
-        lq_positions = tuple(map(lambda x: x * upscaling_factor, hq_positions))
-        hq = hq.crop(hq_positions)
-        lq = lq.crop(lq_positions)
+        compressed_patch, original_patch = crop_patches(
+            compressed_image=compressed_image,
+            original_image=original_image,
+            patch_size=self.patch_size,
+            scale_factor=self.scale_factor,
+        )
 
         if np.random.random() < 0.5:
-            lq = torchvision.transforms.functional.hflip(lq)
-            hq = torchvision.transforms.functional.hflip(hq)
+            compressed_patch = F.hflip(compressed_patch)
+            original_patch = F.hflip(original_patch)
 
-        custom_transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            lambda x: (x - 0.5) * 2.0,
-        ])
+        return (
+            min_max_scaler(F.pil_to_tensor(compressed_patch)),
+            min_max_scaler(F.pil_to_tensor(original_patch)),
+        )
 
-        lq, hq = custom_transform(lq), custom_transform(hq)
 
-        return lq, hq
+def make_train_dataloader(cfg: Gifnoc) -> DataLoader:
+    dataset = CustomPyTorchDataset(
+        original_frames_dir=cfg.paths.train_original_frames_dir,
+        encoded_frames_dir=cfg.paths.train_encoded_frames_dir,
+        patch_size=cfg.params.patch_size,
+        training=True,
+    )
+    return DataLoader(
+        dataset=dataset,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
+        shuffle=True,
+        pin_memory=True,
+    )
 
+
+def make_val_dataloader(cfg: Gifnoc) -> DataLoader:
+    dataset = CustomPyTorchDataset(
+        original_frames_dir=cfg.paths.val_original_frames_dir,
+        encoded_frames_dir=cfg.paths.val_encoded_frames_dir,
+        patch_size=cfg.params.patch_size,
+        training=False,
+    )
+    return DataLoader(
+        dataset=dataset,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
+        shuffle=False,
+        pin_memory=True,
+    )
+
+
+def make_test_dataloader(cfg: Gifnoc) -> DataLoader:
+    dataset = CustomPyTorchDataset(
+        original_frames_dir=cfg.paths.test_original_frames_dir,
+        encoded_frames_dir=cfg.paths.test_encoded_frames_dir,
+        patch_size=cfg.params.patch_size,
+        training=False,
+    )
+    return DataLoader(
+        dataset=dataset,
+        batch_size=cfg.params.batch_size,
+        num_workers=cfg.params.num_workers,
+        shuffle=False,
+        pin_memory=True,
+    )
+
+
+def make_dataloaders(
+    cfg: Gifnoc,
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    return (
+        make_train_dataloader(cfg),
+        make_val_dataloader(cfg),
+        make_test_dataloader(cfg),
+    )
+
+
+if __name__ == "__main__":
+    ...

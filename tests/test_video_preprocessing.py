@@ -2,8 +2,8 @@ import pytest
 
 from binarization.video_preprocessing import (
     all_files_have_the_same_extension,
-    prepare_original_dir,
     prepare_directories,
+    prepare_original_dir,
 )
 
 
