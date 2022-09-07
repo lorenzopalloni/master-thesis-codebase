@@ -1,12 +1,22 @@
-.vscode/
+# big-file folders
 data/
-tests/assets/encoded_frames/
-tests/assets/original_frames/
-tests/assets/encoded/
 artifacts/
 checkpoints/
 outputs/
+
+# any jupyter notebook
 **/*/*.ipynb
+
+# testing
+tests/assets/encoded_frames/
+tests/assets/original_frames/
+tests/assets/encoded/
+
+# vs code
+.vscode/
+
+# mlflow
+mlruns/
 
 ### Python.gitignore
 # Byte-compiled / optimized / DLL files

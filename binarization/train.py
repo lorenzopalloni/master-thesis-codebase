@@ -14,6 +14,8 @@ from binarization import dataset, models
 from binarization.config import Gifnoc, default_config
 from binarization.vaccaro import pytorch_ssim
 
+import mlflow
+
 
 def set_up_artifacts_dirs(artifacts_dir: Path) -> Tuple[Path, Path]:
     """Sets up unique-time-related dirs for model checkpoints and runs"""
@@ -160,6 +162,7 @@ def main(cfg: Gifnoc):
                 metrics['brisque'] = piq.brisque(generated_val).item()
             for metric_name, metric_value in metrics.items():
                 tensorboard_logger.add_scalar(f'{metric_name}_val', metric_value, global_step=epoch_id * progress_bar_val.total + step_id_val)
+                mlflow.log_metric(f'{metric_name}_val', metric_value, epoch_id * progress_bar_val.total + step_id_val)
             ##################################################################
             # validation_epoch_end - END
 
@@ -172,8 +175,9 @@ def main(cfg: Gifnoc):
 
 
 if __name__ == "__main__":
-    default_config.params.limit_train_batches = None
-    default_config.params.limit_val_batches = None
+    default_config.params.limit_train_batches = 2
+    default_config.params.limit_val_batches = 2
+    default_config.params.num_epochs = 16
     default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth')
 
     main(default_config)
