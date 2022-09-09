@@ -2,18 +2,15 @@ TODO List
 ==========
 
 > next checkpoint's agenda:
-
-> remember to work on dev branch
-    until you have finished to work with vaccaro's repo,
-    then you should create a branch for each feature that you
-    would like to implement. Maybe it's worth a check online
-    for tools like Jira, but free and easier to use
+    - workstation access
+    - mlflow integration
 
 ## high priority
-- implement a way to log config
-- implement a way to log metrics
+- mlflow integration is almost done
+    - leave ./mlflow as default location for tracking runs
 
-- ask by email Marco about ws access
+- eval.py for video + timing
+
 - set up ws
 - download BVI-DVC on ws
 - train UNet with BVI-DVC
@@ -24,7 +21,6 @@ TODO List
 ---
 
 ## medium priority
-- replace tensorboard with mlflow
 - check structural reparametrization in DiracNets and RepVGG
 - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
 - the Professor suggests Comet.ml, but I'll check mlflow also since I'm using it at work
@@ -92,4 +88,7 @@ by Vaccaro in his paper as an extra test dataset:
 - DONE - complete eval.py script, need a way to show progress/results
 - DONE - add more `piq.[metric]` on validation step in `future_training.py`
 - DONE - rename `future_training.py` -> `train.py`
+- DONE - add string-ify method to gifnoc (`cfg.params.unet.num_filters` -> `cfg_params_unet_num_filters`)
+- DONE - log params with mlflow
+- DONE - replace tensorboard with mlflow
 
