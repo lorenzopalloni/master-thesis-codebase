@@ -2,12 +2,12 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 
 import lpips
+import mlflow
 import piq
 import torch
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from binarization import dataset, models
@@ -51,9 +51,12 @@ def get_starting_epoch_id(ckpt_path_to_resume: Path) -> int:
 
 
 def main(cfg: Gifnoc):
-    """Main for training a model for super-resolution"""
+    """Main for training a super-resolution model"""
+
+    mlflow.log_params(cfg.params.stringify())
     checkpoints_dir, runs_dir = set_up_artifacts_dirs(cfg.paths.artifacts_dir)
-    tensorboard_logger = SummaryWriter(log_dir=runs_dir)
+    # mlflow.set_tracking_uri(runs_dir)
+
     gen = set_up_unet(cfg=cfg)
     dis = models.Discriminator()
 
@@ -126,16 +129,20 @@ def main(cfg: Gifnoc):
             ##################################################################
             # Generator training step - END
 
+            metrics_train: Dict[str, Union[int, float]] = {}
+            metrics_train['epoch_train'] = epoch_id
+            metrics_train['loss_dis_train'] = loss_dis.item()
+            metrics_train['loss_gen_train'] = loss_gen.item()
+            metrics_train['loss_lpips_train'] = loss_lpips.item()
+            metrics_train['loss_ssim_train'] = loss_ssim.item()
+            metrics_train['loss_bce_train'] = loss_bce.item()
+            mlflow.log_metrics(metrics_train, step=global_step_id)
+
             progress_bar_train.set_description(
                 f'Epoch #{epoch_id} - '
-                f'loss_dis: {loss_dis.item():.8f} - '
-                f'loss_gen: {loss_gen.item():.4f}'
+                f'loss_dis: {metrics_train["loss_dis_train"]:.8f} - '
+                f'loss_gen: {metrics_train["loss_gen_train"]:.4f}'
             )
-            tensorboard_logger.add_scalar('loss_dis', scalar_value=loss_dis, global_step=global_step_id)
-            tensorboard_logger.add_scalar('loss_gen', scalar_value=loss_gen, global_step=global_step_id)
-            tensorboard_logger.add_scalar('loss_lpips', scalar_value=loss_lpips, global_step=global_step_id)
-            tensorboard_logger.add_scalar('loss_ssim', scalar_value=loss_ssim, global_step=global_step_id)
-            tensorboard_logger.add_scalar('loss_bce', scalar_value=loss_bce, global_step=global_step_id)
 
             global_step_id += 1
             ##################################################################
@@ -149,17 +156,16 @@ def main(cfg: Gifnoc):
                 break
             compressed_val = compressed_val.to(device)
             original_val = original_val.to(device)
-            metrics: Dict[str, float] = {}
             gen.eval()
             with torch.no_grad():
                 generated_val = gen(compressed_val).clip(0, 1)
-                metrics['lpips_alex'] = lpips_alex_metric_op(generated_val, original_val).mean().item()
-                metrics['ssim'] = ssim_op(generated_val, original_val).item()
-                metrics['psnr'] = piq.psnr(generated_val, original_val).item()
-                metrics['ms_ssim'] = piq.multi_scale_ssim(generated_val, original_val).item()
-                metrics['brisque'] = piq.brisque(generated_val).item()
-            for metric_name, metric_value in metrics.items():
-                tensorboard_logger.add_scalar(f'{metric_name}_val', metric_value, global_step=epoch_id * progress_bar_val.total + step_id_val)
+                metrics_val: Dict[str, Union[int, float]] = {}
+                metrics_val['lpips_alex_val'] = lpips_alex_metric_op(generated_val, original_val).mean().item()
+                metrics_val['ssim_val'] = ssim_op(generated_val, original_val).item()
+                metrics_val['psnr_val'] = piq.psnr(generated_val, original_val).item()
+                metrics_val['ms_ssim_val'] = piq.multi_scale_ssim(generated_val, original_val).item()
+                metrics_val['brisque_val'] = piq.brisque(generated_val).item()
+            mlflow.log_metrics(metrics_val, step=epoch_id * progress_bar_val.total + step_id_val)
             ##################################################################
             # validation_epoch_end - END
 
@@ -172,8 +178,8 @@ def main(cfg: Gifnoc):
 
 
 if __name__ == "__main__":
-    default_config.params.limit_train_batches = None
-    default_config.params.limit_val_batches = None
+    default_config.params.limit_train_batches = 2
+    default_config.params.limit_val_batches = 2
+    default_config.params.num_epochs = 16
     default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth')
-
     main(default_config)

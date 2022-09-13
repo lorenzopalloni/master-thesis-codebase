@@ -3,12 +3,8 @@ TODO List
 
 > next checkpoint's agenda:
     - workstation access
-    - mlflow integration
 
 ## high priority
-- mlflow integration is almost done
-    - leave ./mlflow as default location for tracking runs
-
 - eval.py for video + timing
 
 - set up ws
@@ -91,4 +87,5 @@ by Vaccaro in his paper as an extra test dataset:
 - DONE - add string-ify method to gifnoc (`cfg.params.unet.num_filters` -> `cfg_params_unet_num_filters`)
 - DONE - log params with mlflow
 - DONE - replace tensorboard with mlflow
+- DONE - set up a couple of sample experiments with mlflow
 
