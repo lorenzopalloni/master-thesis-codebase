@@ -459,7 +459,7 @@ class UNet(nn.Module):
                     block.reparametrize_convs()
 
 
-class SRUnet(nn.Module):
+class SRUNet(nn.Module):
     def __init__(
         self,
         in_dim=3,

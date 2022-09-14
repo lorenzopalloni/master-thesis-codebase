@@ -12,6 +12,16 @@ class UNetConfig:
     use_residual: bool = True
     use_batch_norm: bool = False
     scale_factor: int = 4
+    ckpt_path_to_resume: Optional[Path] = None
+
+
+@dataclass
+class SRUNetConfig:
+    num_filters: int = 64
+    use_residual: bool = True
+    use_batch_norm: bool = False
+    scale_factor: int = 4
+    ckpt_path_to_resume: Optional[Path] = None
 
 
 @dataclass
@@ -27,15 +37,17 @@ class ParamsConfig:
     w0: float = 1e-0  # LPIPS weight
     w1: float = 1e-0  # SSIM weight
     w2: float = 1e-3  # Adversarial loss weight
-    ckpt_path_to_resume: Optional[Path] = None
+    active_model_name: str = 'unet'
     unet: UNetConfig = UNetConfig()
+    srunet: SRUNetConfig = SRUNetConfig()
 
 
 @dataclass
 class PathsConfig:
     project_dir: Path = Path(__file__).parent.parent
-    artifacts_dir: Path = project_dir / "artifacts"
     outputs_dir: Path = project_dir / "outputs"
+    artifacts_dir: Path = project_dir / "artifacts"
+    mlruns_dir: Path = artifacts_dir / 'mlruns'
     data_dir: Path = project_dir / "data"
     train_dir: Path = data_dir / "train"
     val_dir: Path = data_dir / "val"
