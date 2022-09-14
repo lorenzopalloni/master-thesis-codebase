@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import torch
 import torchvision.transforms.functional as F
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from binarization import dataset, train
@@ -83,6 +83,7 @@ def main(cfg: Gifnoc):
             counter += 1
             fig.savefig(save_path)
             plt.close(fig)  # close the current fig to prevent OOM issues
+
 
 if __name__ == "__main__":
     cfg = get_default_config()
