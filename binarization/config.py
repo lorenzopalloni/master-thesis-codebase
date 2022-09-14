@@ -13,6 +13,7 @@ class UNetConfig:
     use_batch_norm: bool = False
     scale_factor: int = 4
     ckpt_path_to_resume: Optional[Path] = None
+    starting_epoch_id: int = 0
 
 
 @dataclass
@@ -66,7 +67,9 @@ class DefaultConfig:
     paths: PathsConfig = PathsConfig()
 
 
-default_config = Gifnoc.from_dataclass(DefaultConfig())
+def get_default_config() -> Gifnoc:
+    return Gifnoc.from_dataclass(DefaultConfig())
+
 
 if __name__ == "__main__":
     paths = PathsConfig()

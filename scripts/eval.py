@@ -4,10 +4,11 @@ from pathlib import Path
 
 import torch
 import torchvision.transforms.functional as F
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from binarization import dataset, train
-from binarization.config import Gifnoc, default_config
+from binarization.config import Gifnoc, get_default_config
 
 
 def inv_adjust_image_for_unet(
@@ -81,13 +82,13 @@ def main(cfg: Gifnoc):
             save_path = save_dir / f'validation_fig_{counter}.jpg'
             counter += 1
             fig.savefig(save_path)
-            # TODO: close fig to save memory
-
+            plt.close(fig)  # close the current fig to prevent OOM issues
 
 if __name__ == "__main__":
+    cfg = get_default_config()
     # default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_28_epoch_9.pth')
-    default_config.params.ckpt_path_to_resume = Path(
+    cfg.params.ckpt_path_to_resume = Path(
         '/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth'
     )
-    default_config.params.batch_size = 10
-    main(default_config)
+    cfg.params.batch_size = 10
+    main(cfg)
