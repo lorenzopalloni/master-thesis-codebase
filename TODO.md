@@ -2,13 +2,14 @@ TODO List
 ==========
 
 > next checkpoint's agenda:
-    - workstation access
+    - Can I use scale x4, or should I stick with scale x2?
+    - I saw that the default in vaccaro's script for CRF is 23,
+        should I use the same?
 
 ## high priority
+- set up data
 - eval.py for video + timing
 
-- set up ws
-- download BVI-DVC on ws
 - train UNet with BVI-DVC
 - train SR-UNet with BVI-DVC
 - train with/without ssim
@@ -88,4 +89,6 @@ by Vaccaro in his paper as an extra test dataset:
 - DONE - log params with mlflow
 - DONE - replace tensorboard with mlflow
 - DONE - set up a couple of sample experiments with mlflow
+- DONE - set up ws
+- DONE - download BVI-DVC on ws (it was already there)
 

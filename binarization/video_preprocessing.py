@@ -45,7 +45,7 @@ def compress(
         # ),
         f'{output_fn}',
     ]
-    subprocess.run(cmd)
+    subprocess.run(cmd, check=True)
 
 
 def video_to_frames(
@@ -72,7 +72,7 @@ def video_to_frames(
         '1',
         f'{ (Path(output_dir) / Path(input_fn).stem).as_posix() }_%4d.jpg',
     ]
-    subprocess.run(cmd)
+    subprocess.run(cmd, check=True)
 
 
 def all_files_have_the_same_extension(folder: Union[Path, str]) -> bool:
