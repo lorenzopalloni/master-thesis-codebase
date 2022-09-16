@@ -1,30 +1,62 @@
+"""Collection of scripts for general package-level utilities"""
+
+import os
 import argparse
 import subprocess
 from pathlib import Path
 from typing import Callable, Dict
 
+def check_venv(venv_name: str):
+    """Raises an exception if a specific virtual env is not currently active"""
+    virtual_env = os.environ.get('VIRTUAL_ENV')
+    if not virtual_env or venv_name not in virtual_env:
+        raise ValueError(f'You should enable `{venv_name}` virtual env.')
 
-def set_up_test_assets():
-    current_dir = Path()
-    tests_dir = current_dir / 'tests'
+
+def set_up_test_assets(project_dir: Path = None):
+    """Sets up resources for testing"""
+    if project_dir is None:
+        project_dir = Path()
+    tests_dir = project_dir / 'tests'
     assets_dir = tests_dir / 'assets'
     original_dir = assets_dir / 'original'
     encoded_dir = assets_dir / 'encoded'
+    script_fp = Path(project_dir, 'binarization', 'video_preprocessing.py')
     if not encoded_dir.exists():
         subprocess.run(
-            'python ./binarization/video_preprocessing.py -i '
+            f'python {script_fp.as_posix()} -i '
             f'{original_dir.as_posix()}'.split(' '),
             check=True,
         )
 
 
+def install_requirements():
+    """Installs requirements assuming `binarization` as the active venv name"""
+    venv_name = 'binarization'
+    check_venv(venv_name)
+
+    command_list = [
+        "pip install -U pip",
+        "pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu113",  # pytorch
+        "pip install piq lpips",  # metrics for image quality assessment
+        "pip install pytest pylint mypy black flake8 pre-commit",  # development packages
+        "pip install mlflow",  # tracking experiments
+        "pip install numpy matplotlib seaborn pandas",
+        f"pip install -e {os.path.join('..', 'gifnoc')}",  # I'll probably hardcode it in binarization
+    ]
+    for cmd in command_list:
+        subprocess.run(cmd.split(' '), check=True)
+
+
 def run_test():
+    """Sets up some resources and runs tests"""
     set_up_test_assets()
     proc = subprocess.run('python -m pytest tests -vv'.split(' '), check=True)
     return proc.stdout
 
 
 def run_coverage():
+    """Sets up resource for testing, runs tests, and runs coverage"""
     set_up_test_assets()
     subprocess.run('coverage run -m pytest tests'.split(' '), check=True)
     subprocess.run('coverage report -m'.split(' '), check=True)
@@ -42,6 +74,7 @@ def main():
     command_dict = {
         'test': run_test,
         'coverage': run_coverage,
+        'install_requirements': install_requirements,
     }
     args = parse_args(command_dict)
     command_dict[args.command]()
