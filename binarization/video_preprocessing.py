@@ -11,12 +11,13 @@ def compress(
     crf: int = 23,
     scale_factor: int = 2,
 ):
-    """Compress a video.
+    """Compresses a video.
 
     Args:
         input_fn (Union[Path, str]): Filename of the input video.
         output_fn (Union[Path, str]): Filename of the compressed video.
         crf (int, optional): Constant Rate Factor. Defaults to 23.
+        scale_factor (int): Scale factor. Defaults to 2.
     """
     cmd = [
         'ffmpeg',
@@ -36,11 +37,11 @@ def compress(
         'faststart',
         '-vf',  # video filters
         (
-            f'scale=iw/{scale_factor}:ih/{scale_factor}'  # downscale, defaults to half
+            f'scale=iw/{scale_factor}:ih/{scale_factor}'  # downscale
             ',format=yuv420p'  # output format, defaults to yuv420p
         ),
         # (
-        #     f'scale=-{scale_factor}:iw'  # downscale, defaults to half
+        #     f'scale=-{scale_factor}:iw'  # downscale
         #     ',format=yuv420p'  # output format, defaults to yuv420p
         # ),
         f'{output_fn}',
@@ -52,7 +53,7 @@ def video_to_frames(
     input_fn: Union[Path, str],
     output_dir: Union[Path, str],
 ):
-    """Split a video into .jpg frames.
+    """Splits a video into .jpg frames.
 
     Args:
         input_fn (Union[Path, str]): Filename of the input video.
@@ -76,7 +77,7 @@ def video_to_frames(
 
 
 def all_files_have_the_same_extension(folder: Union[Path, str]) -> bool:
-    """Return True if all the files in `folder` have the same extension."""
+    """Returns True if all the files in `folder` have the same extension."""
     folder = Path(folder)
     files = list(x for x in folder.iterdir() if not x.is_dir())
     return len(files) == 0 or len(set(x.suffix for x in files)) == 1
@@ -85,17 +86,16 @@ def all_files_have_the_same_extension(folder: Union[Path, str]) -> bool:
 def assure_same_extension_among_files(
     folder: Union[Path, str]
 ) -> Union[bool, Exception]:
-    """Return True if all the files in `folder` have the same extension,
+    """Returns True if all the files in `folder` have the same extension,
     otherwise raise an exception.
     """
     folder = Path(folder)
     if all_files_have_the_same_extension(folder):
         return True
-    else:
-        raise Exception(
-            f'All files in "{folder.resolve().as_posix()}" must have the'
-            ' same extension.'
-        )
+    raise Exception(
+        f'All files in "{folder.resolve().as_posix()}" must have the'
+        ' same extension.'
+    )
 
 
 def prepare_original_dir(input_dir: Union[Path, str]) -> Path:
@@ -113,9 +113,9 @@ def prepare_original_dir(input_dir: Union[Path, str]) -> Path:
         (original_dir := input_dir / 'original').mkdir()
         # move all files in <input_dir>/ to <input_dir>/original, excluding
         # the latter
-        for f in input_dir.iterdir():
-            if f != original_dir:
-                shutil.move(f.as_posix(), original_dir.as_posix())
+        for video_fp in input_dir.iterdir():
+            if video_fp != original_dir:
+                shutil.move(video_fp.as_posix(), original_dir.as_posix())
     elif case2:
         assure_same_extension_among_files(input_dir)
         original_dir = input_dir
@@ -141,7 +141,6 @@ def prepare_directories(
 
 
 def main():
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input_dir', type=str, default='.')
     parser.add_argument('-s', '--scale_factor', type=int, default=2)

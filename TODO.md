@@ -7,6 +7,7 @@ TODO List
         should I use the same?
 
 ## high priority
+- try to work with symlinks
 - set up data
 - eval.py for video + timing
 
@@ -36,8 +37,7 @@ TODO List
 An alternative to the official BVI-DVC dataset can be found at [https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
 Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences, and this alternative contains only 772 sequences, and it is 83.8GB big.
 
-## Videos from [Derf's collection](https://media.xiph.org/video/derf/) used
-by Vaccaro in his paper as an extra test dataset:
+## Videos from [Derf's collection](https://media.xiph.org/video/derf/) used by Vaccaro in his paper as an extra test dataset:
 + -> downloaded on Alienware-M15
 - -> not yet downloaded on Alienware-M15
     + `ducks_take_off`
@@ -91,4 +91,3 @@ by Vaccaro in his paper as an extra test dataset:
 - DONE - set up a couple of sample experiments with mlflow
 - DONE - set up ws
 - DONE - download BVI-DVC on ws (it was already there)
-

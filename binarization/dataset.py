@@ -30,10 +30,10 @@ def compute_adjusted_dimension(an_integer: int) -> int:
     assert (
         an_integer > 0
     ), f"Input should be > 0, but `{an_integer}` was provided."
-    if an_integer % 2 != 0:
+    if an_integer % 2 != 0:  # make it even
         an_integer += 1
-    while an_integer / 2**4 % 2 != 0:
-        an_integer += 2
+    while an_integer / 2**4 % 2 != 0:  # assure divisibility by 16
+        an_integer += 2  # jump from one even number to the next one
     return an_integer
 
 
@@ -202,7 +202,7 @@ class WholeImagesDataset(Dataset):
         original_frames_dir: Path,
         encoded_frames_dir: Path,
         training: bool = False,
-        scale_factor: int = 4,
+        scale_factor: int = 2,
     ):
         """Custom PyTorch Dataset loader for the training phase. Yield a pair
         (x, y), where x is the encoded version of the original image y.
@@ -213,8 +213,8 @@ class WholeImagesDataset(Dataset):
             training (bool, optional): Flag for training vs evaluation phase.
                 Defaults to False.
             scale_factor (Optional[int]): Scale factor between original and
-                encoded frames. Defaults to 4, this means that original frames
-                have a 4:1 resolution ratio compared to encoded frames.
+                encoded frames. Defaults to 2, this means that original frames
+                have a 2:1 resolution ratio compared to encoded frames.
         """
         self.training = training
         self.original_filenames = list_files_in_sub_dirs(
@@ -252,7 +252,7 @@ class CustomPyTorchDataset(Dataset):
         encoded_frames_dir: Path,
         patch_size: int = 96,
         training: bool = True,
-        scale_factor: int = 4,
+        scale_factor: int = 2,
     ):
         """Custom PyTorch Dataset loader for the training phase. Yield a pair
         (x, y), where x is the encoded version of the original image y.
@@ -265,8 +265,8 @@ class CustomPyTorchDataset(Dataset):
             training (bool, optional): Flag for training vs evaluation phase.
                 Defaults to True.
             scale_factor (Optional[int]): Scale factor between original and
-                encoded frames. Defaults to 4, this means that original frames
-                have a 4:1 resolution ratio compared to encoded frames.
+                encoded frames. Defaults to 2, this means that original frames
+                have a 2:1 resolution ratio compared to encoded frames.
         """
         self.patch_size = patch_size
         self.training = training

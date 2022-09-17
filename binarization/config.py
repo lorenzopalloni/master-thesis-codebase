@@ -11,7 +11,7 @@ class UNetConfig:
     num_filters: int = 64
     use_residual: bool = True
     use_batch_norm: bool = False
-    scale_factor: int = 4
+    scale_factor: int = 2
     ckpt_path_to_resume: Optional[Path] = None
     starting_epoch_id: int = 0
 
@@ -21,7 +21,7 @@ class SRUNetConfig:
     num_filters: int = 64
     use_residual: bool = True
     use_batch_norm: bool = False
-    scale_factor: int = 4
+    scale_factor: int = 2
     ckpt_path_to_resume: Optional[Path] = None
 
 
@@ -68,6 +68,7 @@ class DefaultConfig:
 
 
 def get_default_config() -> Gifnoc:
+    """Instantiates a config with default values"""
     return Gifnoc.from_dataclass(DefaultConfig())
 
 

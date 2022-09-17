@@ -37,7 +37,7 @@ def install_requirements():
 
     command_list = [
         "pip install -U pip",
-        "pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu113",  # pytorch
+        "pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu113",
         "pip install piq lpips",  # metrics for image quality assessment
         "pip install pytest pylint mypy black flake8 pre-commit",  # development packages
         "pip install mlflow",  # tracking experiments
@@ -49,14 +49,14 @@ def install_requirements():
 
 
 def run_test():
-    """Sets up some resources and runs tests"""
+    """Sets up resources for testing, and runs tests"""
     set_up_test_assets()
     proc = subprocess.run('python -m pytest tests -vv'.split(' '), check=True)
     return proc.stdout
 
 
 def run_coverage():
-    """Sets up resource for testing, runs tests, and runs coverage"""
+    """Sets up resources for testing, runs tests, and runs coverage"""
     set_up_test_assets()
     subprocess.run('coverage run -m pytest tests'.split(' '), check=True)
     subprocess.run('coverage report -m'.split(' '), check=True)
