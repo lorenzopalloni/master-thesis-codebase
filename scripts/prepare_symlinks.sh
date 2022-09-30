@@ -24,4 +24,3 @@ ln -s "${BVI_DVC}/3hj4t64fkbrgn2ghwp9en4vhtn/Videos/" "${DATA_DIR}/original_vide
 ln -s "${BVI_DVC}/previous_data/encoded/encoded_QF23/" "${DATA_DIR}/compressed_videos"
 ln -s "${BVI_DVC}/previous_data/frames/frames_HQ/" "${DATA_DIR}/original_frames"
 ln -s "${BVI_DVC}/previous_data/frames/frames_JPG_QF23/" "${DATA_DIR}/compressed_frames"
-
