@@ -1,17 +1,16 @@
 TODO List
 ==========
 
-> next checkpoint's agenda:
-    - Can I use scale x4, or should I stick with scale x2?
+> train.py didn't reach the end of a single epoch
+    - I learned how to use screen command, so I'll be able to check any errors
+    - I launched a new experiment
     - I saw that the default in vaccaro's script for CRF is 23,
         should I use the same?
 
 ## high priority
-- try to work with symlinks
-- set up data
+- train UNet with BVI-DVC
 - eval.py for video + timing
 
-- train UNet with BVI-DVC
 - train SR-UNet with BVI-DVC
 - train with/without ssim
 
@@ -21,7 +20,6 @@ TODO List
 ## medium priority
 - check structural reparametrization in DiracNets and RepVGG
 - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
-- the Professor suggests Comet.ml, but I'll check mlflow also since I'm using it at work
 
 ---
 
@@ -91,3 +89,5 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - set up a couple of sample experiments with mlflow
 - DONE - set up ws
 - DONE - download BVI-DVC on ws (it was already there)
+- DONE - try to work with symlinks
+- DONE - set up data

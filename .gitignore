@@ -8,9 +8,9 @@ outputs/
 **/*/*.ipynb
 
 # testing
-tests/assets/encoded_frames/
+tests/assets/compressed_frames/
 tests/assets/original_frames/
-tests/assets/encoded/
+tests/assets/compressed_videos/
 
 # vs code
 .vscode/
