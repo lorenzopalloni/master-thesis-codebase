@@ -44,7 +44,7 @@ def main(cfg: Gifnoc):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     whole_images_dataset = dataset.WholeImagesDataset(
         original_frames_dir=cfg.paths.val_original_frames_dir,
-        encoded_frames_dir=cfg.paths.val_encoded_frames_dir,
+        compressed_frames_dir=cfg.paths.val_compressed_frames_dir,
     )
     dl_val = dataset.DataLoader(
         dataset=whole_images_dataset,
