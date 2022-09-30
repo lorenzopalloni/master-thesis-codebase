@@ -19,13 +19,13 @@ def set_up_test_assets(project_dir: Path = None):
         project_dir = Path()
     tests_dir = project_dir / 'tests'
     assets_dir = tests_dir / 'assets'
-    original_dir = assets_dir / 'original'
-    encoded_dir = assets_dir / 'encoded'
-    script_fp = Path(project_dir, 'binarization', 'video_preprocessing.py')
-    if not encoded_dir.exists():
+    original_videos_dir = assets_dir / 'original_videos'
+    compressed_videos_dir = assets_dir / 'compressed_videos'
+    script_fp = Path(project_dir, 'scripts', 'video_preprocessing.py')
+    if not compressed_videos_dir.exists():
         subprocess.run(
             f'python {script_fp.as_posix()} -i '
-            f'{original_dir.as_posix()}'.split(' '),
+            f'{original_videos_dir.as_posix()}'.split(' '),
             check=True,
         )
 
