@@ -8,3 +8,19 @@ include = '\*.py$'
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.poetry]
+name = "binarization"
+version = "0.1.0"
+description = "Lorenzo Palloni's thesis codebase"
+authors = ["lorenzopalloni <palloni.lorenzo@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
