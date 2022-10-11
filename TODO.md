@@ -1,13 +1,9 @@
 TODO List
 ==========
 
-> train.py didn't reach the end of a single epoch
-    - I learned how to use screen command, so I'll be able to check any errors
-    - I launched a new experiment
-    - I saw that the default in vaccaro's script for CRF is 23,
-        should I use the same?
-
 ## high priority
+- resume from `binarization/dataset.py` line 286 (there is an error about the `frame_buffer`)
+- fix: image too big to be loaded and cropped one-by-one
 - train UNet with BVI-DVC
 - eval.py for video + timing
 
@@ -24,10 +20,6 @@ TODO List
 ---
 
 ## low priority
-- refactor CustomPyTorchDataset class:
-    - rename it ?
-    - use function composition
-    - extract a transform function removing all internal preprocessing
 - pay attention in piq: LPIPS seems to yield different results than in the
     original implementation
 
@@ -91,3 +83,4 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - download BVI-DVC on ws (it was already there)
 - DONE - try to work with symlinks
 - DONE - set up data
+- DONE - learn how to use `screen` command

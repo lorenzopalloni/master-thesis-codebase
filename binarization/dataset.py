@@ -1,4 +1,4 @@
-"""Data module"""
+"""Custom dataloaders"""
 
 import functools
 import itertools
@@ -6,7 +6,7 @@ import warnings
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,278 +18,12 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from torchvision.utils import Image
 
-
-class Stage(Enum):
-    TRAIN = 'train'
-    VAL = 'val'
-    TEST = 'test'
-
-
-def compute_adjusted_dimension(an_integer: int) -> int:
-    """Given an integer `an_integer`, return another integer that:
-    - is greater than `an_integer`
-    - is divisible at least four times by 2
-    - is the closest to `an_integer`
-
-    Adapts image sizes to feed a UNet-like architecture.
-
-    Args:
-        an_integer (int): an integer greater than 0.
-
-    Returns:
-        int: an integer with the properties described above.
-    """
-    assert (
-        an_integer > 0
-    ), f"Input should be > 0, but `{an_integer}` was provided."
-    if an_integer % 2 != 0:  # make it even
-        an_integer += 1
-    while an_integer / 2**4 % 2 != 0:  # assure divisibility by 16
-        an_integer += 2  # jump from one even number to the next one
-    return an_integer
-
-
-def adjust_image_for_unet(image: torch.Tensor) -> torch.Tensor:
-    """Pads until img_h and img_w are both divisible by 2 at least 4 times."""
-    height, width = image.shape[-2], image.shape[-1]
-    adjusted_height = compute_adjusted_dimension(height)
-    adjusted_width = compute_adjusted_dimension(width)
-    return F.pad(
-        image,
-        padding=[
-            (adjusted_width - width) // 2,  # left/right
-            (adjusted_height - height) // 2,  # top/bottom
-        ],
-    )
-
-
-def draw_validation_fig(
-    original_image: torch.Tensor,
-    compressed_image: torch.Tensor,
-    generated_image: torch.Tensor,
-    figsize: Tuple[int, int] = (12, 5),
-) -> plt.Figure:
-    """Draws three images in a row with matplotlib."""
-    original_image_pil = F.to_pil_image(original_image)
-    compressed_image_pil = F.to_pil_image(compressed_image)
-    generated_image_pil = F.to_pil_image(generated_image)
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
-    ax1.imshow(original_image_pil)
-    ax1.set_title('high quality')
-    ax1.axis('off')
-    ax2.imshow(generated_image_pil)
-    ax2.set_title('reconstructed')
-    ax2.axis('off')
-    ax3.imshow(compressed_image_pil)
-    ax3.set_title('low quality')
-    ax3.axis('off')
-    fig.subplots_adjust(
-        top=1.0, bottom=0.0, right=1.0, left=0.0, hspace=0.0, wspace=0.0
-    )
-    return fig
-
-
-def compose(*functions):
-    """Compose several functions together."""
-    return functools.reduce(lambda f, g: lambda x: g(f(x)), functions)
-
-
-def get_starting_random_position(
-    initial_position: int, patch_size: int
-) -> int:
-    """Chooses a random starting position on a given axis for a patch."""
-    random_position = 0
-    if initial_position > patch_size:
-        initial_position -= patch_size
-        random_position = np.random.randint(initial_position)
-    return random_position
-
-
-def random_crop_images(
-    original_image: PIL.Image.Image,
-    compressed_image: PIL.Image.Image,
-    patch_size: int = 96,
-    scale_factor: int = 2,
-) -> Tuple[PIL.Image.Image, PIL.Image.Image]:
-    """Randomly crops two images.
-
-    Crops at a random position `compressed_image`, taking a square
-    (`patch_size`, `patch_size`). Then it crops `original_image`
-    taking a square of dimensions:
-    (`patch_size` * `scale_factor`, `patch_size` * `scale_factor`).
-    """
-    width, height = compressed_image.size
-    random_width = get_starting_random_position(width, patch_size)
-    random_height = get_starting_random_position(height, patch_size)
-
-    compressed_image_positions = (
-        random_width,
-        random_height,
-        random_width + patch_size,
-        random_height + patch_size,
-    )
-    # scale positions
-    original_image_positions = tuple(
-        map(lambda x: x * scale_factor, compressed_image_positions)
-    )
-    original_patch = original_image.crop(original_image_positions)
-    compressed_patch = compressed_image.crop(compressed_image_positions)
-    return original_patch, compressed_patch
-
-
-def lists_have_same_elements(a_list: List, another_list: List) -> bool:
-    """Assure that two given lists have the same elements."""
-    a_set = set(a_list)
-    another_set = set(another_list)
-    if len(a_set) != len(another_set):
-        return False
-    return len(a_set.difference(another_set)) == 0
-
-
-def list_files(
-    path: Path, extension: str, sort_ascending: bool = True
-) -> List[Path]:
-    """List files in a given directory with the same extension.
-
-    By default, the result is provided in lexicographic order.
-    """
-    res = []
-    for x in path.iterdir():
-        if not x.is_dir():
-            if x.suffix.lstrip('.') == extension.lstrip('.'):
-                res.append(x)
-            else:
-                warnings.warn(
-                    f'{x} has not been included since it has '
-                    f'a different extension than {extension}.',
-                    UserWarning,
-                )
-    if sort_ascending:
-        return sorted(res)
-    return res
-
-
-def list_directories(path: Path, sort_ascending: bool = True) -> List[Path]:
-    """List all the directories in a given path.
-
-    By default, the result is provided in lexicographic order.
-    """
-    res = [x for x in path.iterdir() if x.is_dir()]
-    if sort_ascending:
-        return sorted(res)
-    return res
-
-
-def list_subdir_files(
-    path: Path, extension: str, sort_ascending: bool = True
-) -> List[Path]:
-    """List all files in the second level directories of the given path.
-
-    By default, the result is provided in lexicographic order.
-    """
-    res = itertools.chain.from_iterable(
-        (
-            list_files(i_dir, extension, sort_ascending=False)
-            for i_dir in list_directories(path)
-        )
-    )
-    if sort_ascending:
-        return sorted(res)
-    return list(res)
-
-
-def min_max_scaler(
-    tensor: torch.Tensor, tensor_min: float = 0.0, tensor_max: float = 255.0
-) -> torch.Tensor:
-    """Scales any value of a tensor between two given values."""
-    return (tensor - tensor_min) / (tensor_max - tensor_min)
-
-
-def inv_min_max_scaler(
-    tensor: torch.Tensor, tensor_min: float = 0.0, tensor_max: float = 255.0
-) -> torch.Tensor:
-    """Inverse of the min_max_scaler function."""
-    return (tensor * (tensor_max - tensor_min) + tensor_min).int()
-
-
-def default_test_pipe(
-    original_filepath: Path,
-    compressed_filepath: Path,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    original_image = Image.open(original_filepath)
-    compressed_image = Image.open(compressed_filepath)
-
-    return (
-        min_max_scaler(F.pil_to_tensor(original_image)),
-        min_max_scaler(F.pil_to_tensor(compressed_image)),
-    )
-
-
-def default_val_pipe(
-    original_filepath: Path,
-    compressed_filepath: Path,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    original_image = Image.open(original_filepath)
-    compressed_image = Image.open(compressed_filepath)
-
-    original_patch, compressed_patch = random_crop_images(
-        original_image=original_image,
-        compressed_image=compressed_image,
-    )
-
-    return (
-        min_max_scaler(F.pil_to_tensor(original_patch)),
-        min_max_scaler(F.pil_to_tensor(compressed_patch)),
-    )
-
-
-def default_train_pipe(
-    original_filepath: Path, compressed_filepath: Path
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    original_image = Image.open(original_filepath)
-    compressed_image = Image.open(compressed_filepath)
-
-    original_patch, compressed_patch = random_crop_images(
-        original_image=original_image,
-        compressed_image=compressed_image,
-    )
-
-    if np.random.random() < 0.5:
-        original_patch = F.hflip(original_patch)
-        compressed_patch = F.hflip(compressed_patch)
-
-    return (
-        min_max_scaler(F.pil_to_tensor(original_patch)),
-        min_max_scaler(F.pil_to_tensor(compressed_patch)),
-    )
-
-
-def identity_pipe(original_filepath: Path, compressed_filepath: Path):
-    return original_filepath, compressed_filepath
-
-
-class ImageFilepathDataset(Dataset):
-    def __init__(
-        self,
-        original_filepaths: List[Path],
-        compressed_filepaths: List[Path],
-        pipe: Callable = identity_pipe,
-    ):
-        self.original_filepaths = original_filepaths
-        self.compressed_filepaths = compressed_filepaths
-        self.pipe = pipe
-
-    def __len__(self) -> int:
-        _len = len(self.original_filepaths)
-        assert len(self.compressed_filepaths) == _len
-        return _len
-
-    def __getitem__(self, i):
-        original_fn, compressed_fn = (
-            self.original_filepaths[i],
-            self.compressed_filepaths[i],
-        )
-        return self.pipe(original_fn, compressed_fn)
+from binarization.datatools import (
+    min_max_scaler,
+    random_crop_images,
+    list_files,
+    list_directories,
+)
 
 
 def get_train_val_test_indexes(
@@ -305,7 +39,7 @@ def get_train_val_test_indexes(
     (760, 20, 20)
 
     Args:
-        n (int): Number of indexes that will rane from `0` to `n - 1`.
+        n (int): Number of indexes that will range from `0` to `n - 1`.
         val_ratio (float, optional): Percentage of integers to
             allocate for the validation set, between `0.0` and `1.0`.
             Defaults to 0.025.
@@ -408,6 +142,345 @@ def get_splits(cfg: Gifnoc) -> Dict[str, List[str]]:
     return splits
 
 
+###############################################################################
+
+class Stage(Enum):
+    TRAIN = 'train'
+    VAL = 'val'
+    TEST = 'test'
+
+
+class Buffer:
+    def __init__(
+        self,
+        init_list: List[Any],
+        buffer_size: int = 8,
+        shuffle: bool = False,
+    ):
+        self.values = init_list
+        self.buffer_size = buffer_size
+        self.shuffle = shuffle
+
+        self.n_frames = len(self.values)
+        self.indexes = np.arange(self.n_frames)
+        if self.shuffle: np.random.shuffle(self.indexes)
+        self.start_idx = 0
+        
+    def __len__(self):
+        return self.n_frames // self.buffer_size
+    
+    def __getitem__(self, i: int):
+        del i
+
+        if self.start_idx > self.n_frames - self.buffer_size:
+            raise StopIteration
+        
+        indexes = self.indexes[self.start_idx: self.start_idx + self.buffer_size]
+        buffer = [self.values[idx] for idx in indexes]
+        self.start_idx += self.buffer_size
+
+        return buffer
+
+def get_paired_paths(cfg: Gifnoc, stage: Stage) -> List[Tuple[Path, Path]]:
+    """Lists pairs of original/compressed paths for a specific stage.
+
+    Available stages: {`train`, `val`, 'test'}.
+
+    Args:
+        cfg (Gifnoc): Configuration object.
+        stage (str): A string representing the stage,
+            the possible choices are `train`, `val`,
+            and `test`.
+
+    Returns:
+        List[Tuple[Path, Path]]: Pairs of original/compressed frame paths.
+    """
+    splits = get_splits(cfg)
+    original_paths = list(
+        itertools.chain.from_iterable(
+            list_files(
+                Path(cfg.paths.original_frames_dir, path), extension='.png'
+            )
+            for path in splits[stage.value]
+        )
+    )
+    compressed_paths = list(
+        itertools.chain.from_iterable(
+            list_files(
+                Path(cfg.paths.compressed_frames_dir, path), extension='.jpg'
+            )
+            for path in splits[stage.value]
+        )
+    )
+    assert len(original_paths) == len(compressed_paths)
+    return list(zip(original_paths, compressed_paths))
+
+def default_train_pipe(
+    original_image: PIL.Image, compressed_image: PIL.Image
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    original_patch, compressed_patch = random_crop_images(
+        original_image=original_image,
+        compressed_image=compressed_image,
+    )
+    if np.random.random() < 0.5:
+        original_patch = F.hflip(original_patch)
+        compressed_patch = F.hflip(compressed_patch)
+    return (
+        min_max_scaler(F.pil_to_tensor(original_patch)),
+        min_max_scaler(F.pil_to_tensor(compressed_patch)),
+    )
+
+def default_val_pipe(
+    original_image: PIL.Image, compressed_image: PIL.Image
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    original_patch, compressed_patch = random_crop_images(
+        original_image=original_image,
+        compressed_image=compressed_image,
+    )
+    return (
+        min_max_scaler(F.pil_to_tensor(original_patch)),
+        min_max_scaler(F.pil_to_tensor(compressed_patch)),
+    )
+
+def default_test_pipe(
+    original_image: PIL.Image, compressed_image: PIL.Image
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    return (
+        min_max_scaler(F.pil_to_tensor(original_image)),
+        min_max_scaler(F.pil_to_tensor(compressed_image)),
+    )
+
+
+def patch_generator(
+    paired_images: List[Tuple[PIL.Image, PIL.Image]],
+    pipe: Callable[[PIL.Image, PIL.Image], Tuple[torch.Tensor, torch.Tensor]],
+    buffer_size: int = 8,
+    batch_size: int = 4,
+) -> Iterator:
+    n_pairs = len(paired_images)
+    for _ in range(buffer_size):
+        original_batch = []
+        compressed_batch = []
+        for _ in range(batch_size):
+            random_pair_idx = np.random.randint(0, n_pairs, dtype=np.uint8)
+            original_image, compressed_image = paired_images[random_pair_idx]
+            original_patch, compressed_patch = pipe(original_image, compressed_image)
+            original_batch.append(original_patch)
+            compressed_batch.append(compressed_patch)
+        yield torch.stack(original_batch), torch.stack(compressed_batch)
+
+PIPES = {
+    Stage.TRAIN: default_train_pipe,
+    Stage.VAL: default_val_pipe,
+    Stage.TEST: default_test_pipe,
+}
+
+
+def make_dataloader(cfg, stage, frame_buffer_size, patch_buffer_size, batch_size):
+    paired_paths = get_paired_paths(cfg, stage)
+    paired_paths_buffer = Buffer(
+        init_list=paired_paths,
+        buffer_size=frame_buffer_size,
+        shuffle=True if stage == Stage.TRAIN else False
+    )
+    paired_images = [(Image.open(o), Image.open(c)) for o, c in paired_paths_buffer]
+    return patch_generator(paired_images, pipe=PIPES[stage], batch_size=batch_size, buffer_size=patch_buffer_size)
+
+###############################################################################
+
+
+class FrameBuffer:
+    def __init__(
+        self,
+        original_paths: List[Path],
+        compressed_paths: List[Path],
+        buffer_size: int = 8,
+        shuffle: bool = False,
+    ):
+        self.original_paths = original_paths
+        self.compressed_paths = compressed_paths
+        self.buffer_size = buffer_size
+        self.shuffle = shuffle
+
+        self.n_frames = len(self.original_paths)
+        self.indexes = np.arange(self.n_frames)
+        if self.shuffle: np.random.shuffle(self.indexes)
+        self.start_idx = 0
+        
+    def __len__(self):
+        return self.n_frames // self.buffer_size
+    
+    def __getitem__(self, i: int):
+        del i
+
+        if self.start_idx > self.n_frames - self.buffer_size:
+            raise StopIteration
+        
+        indexes = self.indexes[self.start_idx: self.start_idx + self.buffer_size]
+        paths = [(self.original_paths[idx], self.compressed_paths[idx]) for idx in indexes]
+        buffer = [(Image.open(o), Image.open(c)) for o, c in paths]
+        self.start_idx += self.buffer_size
+
+        return buffer
+
+
+def default_test_pipe(
+    original_path: Path,
+    compressed_path: Path,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    original_image = Image.open(original_path)
+    compressed_image = Image.open(compressed_path)
+
+    return (
+        min_max_scaler(F.pil_to_tensor(original_image)),
+        min_max_scaler(F.pil_to_tensor(compressed_image)),
+    )
+
+
+def default_val_pipe(
+    original_path: Path,
+    compressed_path: Path,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    original_image = Image.open(original_path)
+    compressed_image = Image.open(compressed_path)
+
+    original_patch, compressed_patch = random_crop_images(
+        original_image=original_image,
+        compressed_image=compressed_image,
+    )
+
+    return (
+        min_max_scaler(F.pil_to_tensor(original_patch)),
+        min_max_scaler(F.pil_to_tensor(compressed_patch)),
+    )
+
+
+def default_train_pipe(
+    original_path: Path, compressed_path: Path
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    original_image = Image.open(original_path)
+    compressed_image = Image.open(compressed_path)
+
+    original_patch, compressed_patch = random_crop_images(
+        original_image=original_image,
+        compressed_image=compressed_image,
+    )
+
+    if np.random.random() < 0.5:
+        original_patch = F.hflip(original_patch)
+        compressed_patch = F.hflip(compressed_patch)
+
+    return (
+        min_max_scaler(F.pil_to_tensor(original_patch)),
+        min_max_scaler(F.pil_to_tensor(compressed_patch)),
+    )
+
+
+def image_only_pipe(original_path: Path, compressed_path: Path):
+    """Pipe that loads images without doing anything else."""
+    original_image = Image.open(original_path)
+    compressed_image = Image.open(compressed_path)
+    return original_image, compressed_image
+
+
+def identity_pipe(original_path: Path, compressed_path: Path):
+    return original_path, compressed_path
+
+
+def custom_collate_fn(batch):
+    return batch
+
+
+class FrameBuffer:
+    def __init__(self, fps, size: int = 8, shuffle: bool = False):
+        self.n_fps = len(fps)
+        indexes = np.arange(self.n_fps)
+        if shuffle:
+            np.random.shuffle(indexes)
+
+        self.fps = fps
+        self.size = size
+        self.pointer = 0
+
+    def __len__(self):
+        return self.n_fps // self.size
+
+    def __getitem__(self, i: int):
+        buffer = self.fps[self.pointer : self.pointer + self.size]
+        self.pointer += self.size
+        return buffer
+
+
+class BufferedFrameDataset(Dataset):
+    def __init__(
+        self,
+        original_paths: List[Path],
+        compressed_paths: List[Path],
+        frame_buffer_size: int = 8,  # a good value should be around the same as the batch_size
+        patch_buffer_size: int = 16,  # a good value should be 5 times the frame_buffer_size
+        shuffle: bool = True,
+    ):
+        self.original_paths = original_paths
+        self.compressed_paths = compressed_paths
+        assert len(self.original_paths) == len(self.compressed_paths)
+
+        self.frame_buffer_size = frame_buffer_size
+        self.patch_buffer_size = patch_buffer_size
+
+        frame_dataset = ImageFilepathDataset(
+            self.original_paths,
+            self.compressed_paths,
+            pipe=image_only_pipe,
+        )
+        self.all_frame_buffers = iter(
+            DataLoader(
+                frame_dataset,
+                batch_size=frame_buffer_size,
+                shuffle=shuffle,
+                collate_fn=custom_collate_fn,
+            )
+        )
+        self.curr_frame_buffer = next(self.all_frame_buffers)
+        self.frame_buffer_counter = 0
+
+    def __len__(self):
+        return len(self.original_paths)
+
+    def __getitem__(self, i):
+        if self.frame_buffer_counter > self.patch_buffer_size - 1:
+            self.curr_frame_buffer = next(self.all_frame_buffers)
+            self.frame_buffer_counter = 0
+        self.frame_buffer_counter += 1
+        j = i % self.frame_buffer_size
+        return self.curr_frame_buffer[j]
+
+
+class ImageFilepathDataset(Dataset):
+    def __init__(
+        self,
+        original_paths: List[Path],
+        compressed_paths: List[Path],
+        pipe: Callable = identity_pipe,
+    ):
+        self.original_paths = original_paths
+        self.compressed_paths = compressed_paths
+        assert len(self.original_paths) == len(self.compressed_paths)
+
+        self.pipe = pipe
+
+    def __len__(self) -> int:
+        return len(self.original_paths)
+
+    def __getitem__(self, i):
+        original_fn, compressed_fn = (
+            self.original_paths[i],
+            self.compressed_paths[i],
+        )
+        return self.pipe(original_fn, compressed_fn)
+
+###############################################################################
+
+
 def make_dataset(
     cfg: Gifnoc,
     stage: Stage,
@@ -433,7 +506,7 @@ def make_dataset(
         ImageFilepathDataset: An ImageFilepathDataset for a specific stage.
     """
     splits = get_splits(cfg)
-    original_filepaths = list(
+    original_paths = list(
         itertools.chain.from_iterable(
             list_files(
                 Path(cfg.paths.original_frames_dir, path), extension='.png'
@@ -441,7 +514,7 @@ def make_dataset(
             for path in splits[stage.value]
         )
     )
-    compressed_filepaths = list(
+    compressed_paths = list(
         itertools.chain.from_iterable(
             list_files(
                 Path(cfg.paths.compressed_frames_dir, path), extension='.jpg'
@@ -450,8 +523,8 @@ def make_dataset(
         )
     )
     return ImageFilepathDataset(
-        original_filepaths=original_filepaths,
-        compressed_filepaths=compressed_filepaths,
+        original_paths=original_paths,
+        compressed_paths=compressed_paths,
         pipe=pipe,
     )
 
@@ -504,4 +577,50 @@ def make_dataloaders(
 
 
 if __name__ == "__main__":
-    ...
+    import json
+    from pathlib import Path
+    from binarization import dataset, config, train
+    from binarization.dataset import (
+        Stage,
+        get_splits,
+        list_files,
+        BufferedFrameDataset,
+    )
+    import itertools
+
+    project_dir = Path().resolve().parent
+    data_dir = project_dir / 'data'
+    o_dir = data_dir / 'original_frames'
+    c_dir = data_dir / 'compressed_frames'
+    split_json = data_dir / 'splits.json'
+    device = train.set_cuda_device(verbose=True)
+    cfg = config.get_default_config()
+
+    from binarization.dataset import ImageFilepathDataset
+
+    splits = get_splits(cfg)
+    original_paths = list(
+        itertools.chain.from_iterable(
+            list_files(
+                Path(cfg.paths.original_frames_dir, path), extension='.png'
+            )
+            for path in splits[Stage.VAL.value]
+        )
+    )
+    compressed_paths = list(
+        itertools.chain.from_iterable(
+            list_files(
+                Path(cfg.paths.compressed_frames_dir, path), extension='.jpg'
+            )
+            for path in splits[Stage.VAL.value]
+        )
+    )
+    buffered_frame_dataset = BufferedFrameDataset(
+        original_paths=original_paths,
+        compressed_paths=compressed_paths,
+    )
+    buffered_frame_dl = DataLoader(
+        buffered_frame_dataset, batch_size=2, shuffle=True
+    )
+    buffered_frame_iterator = iter(buffered_frame_dl)
+    iterator = next(buffered_frame_iterator)
