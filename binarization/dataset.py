@@ -159,12 +159,6 @@ class Stage(Enum):
 def identity_pipe(x, *args):
     return (x,) + args if args else x
 
-def path_to_frame_pipe(
-    pair_path: tuple[Path, Path]
-) -> tuple[PIL.Image.Image, PIL.Image.Image]:
-    original_path, compressed_path = pair_path
-    return Image.open(original_path), Image.open(compressed_path)
-
 class BufferGenerator:
     def __init__(
         self,
@@ -172,16 +166,30 @@ class BufferGenerator:
         buffer_size: int,
         shuffle: bool,
         pipe: Callable[[Any], Any] = identity_pipe,
-        max_iterations: int | None = 1,
+        n_iterations: int | None = 1,
     ):
+        """Generator that serves buffered chunk of items from a list of items.
+
+        Args:
+            init_list (list[Any]): A list of items
+            buffer_size (int): Amount of element per buffer.
+            shuffle (bool): If True, items are randomly permuted once
+                at the beginning of each iteration.
+            pipe (Callable[[Any], Any], optional): Function applied to
+                each single item before entering the buffer. Defaults
+                to identity_pipe.
+            n_iterations (int | None, optional): Number of iterations.
+                For each iteration, `len(init_list) // buffer_size` number
+                of buffers will be served. Defaults to 1.
+        """
         self.items = init_list
         self.buffer_size = buffer_size
         self.shuffle = shuffle
         self.pipe = pipe
-        self.max_iterations = (
-            max_iterations
-            if max_iterations is not None
-            and max_iterations > 0
+        self.n_iterations = (
+            n_iterations
+            if n_iterations is not None
+            and n_iterations > 0
             else None
         )
         self.iteration_counter = 0
@@ -197,8 +205,8 @@ class BufferGenerator:
     def end_iteration_step(self):
         self.iteration_counter += 1
         if (
-            self.max_iterations is not None
-            and self.iteration_counter >= self.max_iterations
+            self.n_iterations is not None
+            and self.iteration_counter >= self.n_iterations
         ):
             raise StopIteration
         else:
@@ -223,7 +231,7 @@ class BufferGenerator:
     
 
 def get_paired_paths(cfg: Gifnoc, stage: Stage) -> list[tuple[Path, Path]]:
-    """lists pairs of original/compressed paths for a specific stage.
+    """Lists pairs of original/compressed paths for a specific stage.
 
     Available stages: {`train`, `val`, 'test'}.
 
@@ -272,10 +280,12 @@ def default_train_pipe(
 def default_val_pipe(
     original_image: PIL.Image.Image, compressed_image: PIL.Image.Image
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    np.random.seed(42)  # crop at random positions but always the same
     original_patch, compressed_patch = random_crop_images(
         original_image=original_image,
         compressed_image=compressed_image,
     )
+    np.random.seed(None)
     return (
         min_max_scaler(F.pil_to_tensor(original_patch)),
         min_max_scaler(F.pil_to_tensor(compressed_patch)),
@@ -290,11 +300,10 @@ def default_test_pipe(
     )
 
 def batch_generator(
-    paired_paths: list[tuple[Path, Path]],
-    path_to_frame_pipe: Callable[[tuple[Path, Path]], tuple[PIL.Image.Image, PIL.Image.Image]],
+    cfg: Gifnoc,
     frame_buffer_size: int,
-    n_patches_per_frame_buffer: int,
-    batch_size: int,
+    n_batches_per_frame_buffer: int,
+    n_paired_patches_per_batch: int,
     stage: Stage,
 ) -> Iterator:
     """Generates batches of random patches prefetching some paired frames.
@@ -313,39 +322,51 @@ def batch_generator(
                 (original_path_2, compressed_path_2),
                 ...
             ].
-        path_to_frame_pipe (Callable[
-                [tuple[Path, Path]],
-                tuple[PIL.Image.Image, PIL.Image.Image]
-            ]): Function to transfom a pair of paths in a pair of images.
-        frame_buffer_size (int): Amount of frames that the buffer loads
-        n_patches_per_frame_buffer (int): Number of patches that can be
-            drawn from a frame buffer before refreshing it with new frames.
-        batch_size (int): Batch size.
+        frame_buffer_size (int): Amount of frames that the buffer loads.
+        n_batches_per_frame_buffer (int): Number of batches (each
+            consisting of `batch_size` patches) that can be drawn
+            from a frame buffer before refreshing it with new frames.
+        n_paired_patches_per_batch (int): Batch size.
         stage (Stage): Choose in {`Stage.TRAIN`, `Stage.VAL`, `Stage.TEST`}.
 
     Yields:
         Iterator: Batch iterator.
     """
+    shuffle = True if stage == Stage.TRAIN else False
+    paired_paths = get_paired_paths(cfg=cfg, stage=stage)
+
+    def path_to_frame_pipe(
+        paired_paths: tuple[Path, Path]
+    ) -> tuple[PIL.Image.Image, PIL.Image.Image]:
+        original_path, compressed_path = paired_paths
+        return Image.open(original_path), Image.open(compressed_path)
+
+    paired_frame_buffer_generator = BufferGenerator(
+        init_list=paired_paths,
+        buffer_size=frame_buffer_size,
+        shuffle=shuffle,
+        pipe=path_to_frame_pipe,
+    )
+
     frame_to_patch_pipes = {
         Stage.TRAIN: default_train_pipe,
         Stage.VAL: default_val_pipe,
         Stage.TEST: default_test_pipe,
     }
 
-    paired_frame_buffer_generator = BufferGenerator(
-        init_list=paired_paths,
-        buffer_size=frame_buffer_size,
-        shuffle=True if stage == Stage.TRAIN else False,
-        pipe=path_to_frame_pipe,
-    )
     for paired_frame_buffer in paired_frame_buffer_generator:
-        assert len(paired_frame_buffer) == frame_buffer_size  # to be removed
-        for _ in range(n_patches_per_frame_buffer):
+        if not shuffle:
+            n_batches_per_frame_buffer = frame_buffer_size
+            n_paired_patches_per_batch = 1
+        for idx in range(n_batches_per_frame_buffer):
             original_batch = []
             compressed_batch = []
-            for _ in range(batch_size):
-                random_pair_idx = np.random.randint(0, frame_buffer_size, dtype=np.uint8)
-                original_image, compressed_image = paired_frame_buffer[random_pair_idx]
+            for _ in range(n_paired_patches_per_batch):
+                random_idx = (
+                    np.random.randint(0, frame_buffer_size, dtype=np.uint8)
+                    if shuffle else idx
+                )
+                original_image, compressed_image = paired_frame_buffer[random_idx]
                 original_patch, compressed_patch = frame_to_patch_pipes[stage](
                     original_image, compressed_image
                 )
