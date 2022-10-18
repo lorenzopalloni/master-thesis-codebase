@@ -1,10 +1,11 @@
 """Collection of data-related utilities"""
 
+from __future__ import annotations
+
 import functools
 import itertools
 import warnings
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,7 +49,7 @@ def random_crop_images(
     compressed_image: PIL.Image.Image,
     patch_size: int = 96,
     scale_factor: int = 2,
-) -> Tuple[PIL.Image.Image, PIL.Image.Image]:
+) -> tuple[PIL.Image.Image, PIL.Image.Image]:
     """Randomly crops two images.
 
     Crops at a random position `compressed_image`, taking a square
@@ -117,7 +118,7 @@ def draw_validation_fig(
     original_image: torch.Tensor,
     compressed_image: torch.Tensor,
     generated_image: torch.Tensor,
-    figsize: Tuple[int, int] = (12, 5),
+    figsize: tuple[int, int] = (12, 5),
 ) -> plt.Figure:
     """Draws three images in a row with matplotlib."""
     original_image_pil = F.to_pil_image(original_image)
@@ -139,7 +140,7 @@ def draw_validation_fig(
     return fig
 
 
-def lists_have_same_elements(a_list: List, another_list: List) -> bool:
+def lists_have_same_elements(a_list: list, another_list: list) -> bool:
     """Assures that two given lists have the same elements."""
     a_set = set(a_list)
     another_set = set(another_list)
@@ -150,8 +151,8 @@ def lists_have_same_elements(a_list: List, another_list: List) -> bool:
 
 def list_files(
     path: Path, extension: str, sort_ascending: bool = True
-) -> List[Path]:
-    """Lists files in a given directory with the same extension.
+) -> list[Path]:
+    """lists files in a given directory with the same extension.
 
     By default, the result is provided in lexicographic order.
     """
@@ -171,8 +172,8 @@ def list_files(
     return res
 
 
-def list_directories(path: Path, sort_ascending: bool = True) -> List[Path]:
-    """Lists all the directories in a given path.
+def list_directories(path: Path, sort_ascending: bool = True) -> list[Path]:
+    """lists all the directories in a given path.
 
     By default, the result is provided in lexicographic order.
     """
@@ -184,8 +185,8 @@ def list_directories(path: Path, sort_ascending: bool = True) -> List[Path]:
 
 def list_subdir_files(
     path: Path, extension: str, sort_ascending: bool = True
-) -> List[Path]:
-    """Lists all files in the second level directories of the given path.
+) -> list[Path]:
+    """lists all files in the second level directories of the given path.
 
     By default, the result is provided in lexicographic order.
     """

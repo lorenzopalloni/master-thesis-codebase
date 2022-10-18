@@ -1,7 +1,8 @@
 # pylint: disable=missing-module-docstring,missing-class-docstring,too-many-instance-attributes
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from gifnoc import Gifnoc
 
@@ -12,7 +13,7 @@ class UNetConfig:
     use_residual: bool = True
     use_batch_norm: bool = False
     scale_factor: int = 2
-    ckpt_path_to_resume: Optional[Path] = None
+    ckpt_path_to_resume: Path | None = None
     starting_epoch_id: int = 0
 
 
@@ -22,7 +23,8 @@ class SRUNetConfig:
     use_residual: bool = True
     use_batch_norm: bool = False
     scale_factor: int = 2
-    ckpt_path_to_resume: Optional[Path] = None
+    ckpt_path_to_resume: Path | None = None
+    starting_epoch_id: int = 0
 
 
 @dataclass
@@ -31,8 +33,10 @@ class ParamsConfig:
     gen_lr: float = 1e-4
     patch_size: int = 96
     batch_size: int = 16  # {8, 32}
-    limit_train_batches: Optional[int] = None
-    limit_val_batches: Optional[int] = None
+    buffer_size: int = 32
+    n_batches_per_buffer: int = 8
+    limit_train_batches: int | None = None
+    limit_val_batches: int | None = None
     num_workers: int = 1  # {1, 12}
     num_epochs: int = 100
     w0: float = 1e-0  # LPIPS weight

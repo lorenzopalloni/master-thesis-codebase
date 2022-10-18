@@ -1,5 +1,4 @@
-from pathlib import Path  # noqa F401
-
+# pylint: disable=missing-module-docstring,missing-function-docstring,missing-class-docstring
 import numpy as np
 import pytest  # noqa: F401
 import torchvision

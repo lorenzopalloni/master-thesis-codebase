@@ -1,8 +1,8 @@
 """Module to train a super-resolution model"""
 
-from datetime import datetime
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, Tuple, Union
 
 import lpips
 import mlflow
@@ -10,88 +10,15 @@ import piq
 import torch
 from tqdm import tqdm
 
-from binarization import dataset, models
+from binarization import models
+from binarization.dataset import get_train_batches, get_val_batches
 from binarization.config import Gifnoc, get_default_config
 from binarization.vaccaro import pytorch_ssim
-
-
-def set_cuda_device(device_id: int = 1, verbose: bool = False) -> str:
-    """Tries to set device id to `1` with 3 GPUs and to `0` with only one."""
-    if not torch.cuda.is_available():
-        raise ValueError("pytorch was not able to detect any GPU.")
-    curr_device_name = torch.cuda.get_device_name()
-    curr_device_id = torch.cuda.current_device()
-    curr_device_count = torch.cuda.device_count()
-    if verbose: print('Current device name:', curr_device_name)
-    if verbose: print('Current device id:', curr_device_id)
-    if verbose: print('Trying to change device id...')
-    if (
-        curr_device_count == 3  # solaris workstation
-        and curr_device_id != device_id
-    ):
-        torch.cuda.set_device(f'cuda:{device_id}')
-        if verbose: print(f'Device has been changed from cuda:{curr_device_id} to cuda:{device_id}')
-        if verbose: print('Actual device name:', torch.cuda.get_device_name())
-    else:
-        if verbose: print('Nothing changed.')
-    return f'cuda:{torch.cuda.current_device()}'
-
-
-def run_unet_experiment(cfg: Gifnoc):
-    mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
-    experiment = mlflow.set_experiment('UNet_training')
-    with mlflow.start_run(
-        experiment_id=experiment.experiment_id,
-        description="Running UNet training",
-    ) as run:
-        mlflow.log_params(cfg.params.stringify())
-        main(cfg)
-
-
-def run_srunet_experiment(cfg: Gifnoc):
-    experiment = mlflow.set_experiment('SRUNet_training')
-    with mlflow.start_run(
-        experiment_id=experiment.experiment_id,
-        description="Running SR-UNet training",
-    ) as run:
-        mlflow.log_params(cfg.params.stringify())
-        main(cfg)
-
-
-def set_up_checkpoints_dir(artifacts_dir: Path) -> Path:
-    """Sets up unique-time-related dirs for model checkpoints and runs"""
-    str_now = datetime.now().strftime(r"%Y_%m_%d_%H_%M_%S")
-    checkpoints_dir = Path(artifacts_dir, 'checkpoints', str_now)
-    checkpoints_dir.mkdir(parents=True, exist_ok=True)
-    return checkpoints_dir
-
-
-def set_up_unet(cfg: Gifnoc) -> models.UNet:
-    """Instantiates a UNet, resuming model weights if provided"""
-    generator = models.UNet(
-        num_filters=cfg.params.unet.num_filters,
-        use_residual=cfg.params.unet.use_residual,
-        use_batch_norm=cfg.params.unet.use_batch_norm,
-        scale_factor=cfg.params.unet.scale_factor
-    )
-    if cfg.params.unet.ckpt_path_to_resume:
-        print(f'>>> resume from {cfg.params.unet.ckpt_path_to_resume}')
-        generator.load_state_dict(torch.load(cfg.params.unet.ckpt_path_to_resume.as_posix()))
-    return generator
-
-
-# def set_up_srunet(cfg: Gifnoc) -> models.SRUNet:
-#     """Instantiates a UNet, resuming model weights if provided"""
-#     generator = models.SRUNet(
-#         num_filters=cfg.params.unet.num_filters,
-#         use_residual=cfg.params.unet.use_residual,
-#         use_batch_norm=cfg.params.unet.use_batch_norm,
-#         scale_factor=cfg.params.unet.scale_factor
-#     )
-#     if cfg.params.srunet.ckpt_path_to_resume:
-#         print(f'>>> resume from {cfg.params.srunet.ckpt_path_to_resume}')
-#         generator.load_state_dict(torch.load(cfg.params.srunet.ckpt_path_to_resume.as_posix()))
-#     return generator
+from binarization.traintools import (
+    set_cuda_device,
+    set_up_checkpoints_dir,
+    set_up_unet,
+)
 
 
 def main(cfg: Gifnoc):
@@ -117,13 +44,13 @@ def main(cfg: Gifnoc):
     lpips_vgg_loss_op.to(device)
     lpips_alex_metric_op.to(device)
 
-    dl_train, dl_val, dl_test = dataset.make_dataloaders(cfg=cfg)
-
     global_step_id = 0
+    global_step_id_val = 0
 
     starting_epoch_id = cfg.params.unet.starting_epoch_id
     for epoch_id in range(starting_epoch_id, cfg.params.num_epochs):
-        progress_bar_train = tqdm(dl_train, total=cfg.params.limit_train_batches)
+        train_batches = get_train_batches(cfg)
+        progress_bar_train = tqdm(train_batches, total=cfg.params.limit_train_batches)
         for step_id_train, (original, compressed) in enumerate(progress_bar_train):
             # training_step - START
             ##################################################################
@@ -171,7 +98,7 @@ def main(cfg: Gifnoc):
             ##################################################################
             # Generator training step - END
 
-            metrics_train: Dict[str, Union[int, float]] = {}
+            metrics_train: dict[str, int | float] = {}
             metrics_train['epoch_train'] = epoch_id
             metrics_train['loss_dis_train'] = loss_dis.item()
             metrics_train['loss_gen_train'] = loss_gen.item()
@@ -190,7 +117,8 @@ def main(cfg: Gifnoc):
             ##################################################################
             # training_step - END
 
-        progress_bar_val = tqdm(dl_val, total=cfg.params.limit_val_batches)
+        val_batches = get_val_batches(cfg)
+        progress_bar_val = tqdm(val_batches, total=cfg.params.limit_val_batches)
         for step_id_val, (original_val, compressed_val) in enumerate(progress_bar_val):
             # validation_step - START
             ##################################################################
@@ -201,13 +129,14 @@ def main(cfg: Gifnoc):
             gen.eval()
             with torch.no_grad():
                 generated_val = gen(compressed_val).clip(0, 1)
-                metrics_val: Dict[str, Union[int, float]] = {}
+                metrics_val: dict[str, int | float] = {}
                 metrics_val['lpips_alex_val'] = lpips_alex_metric_op(generated_val, original_val).mean().item()
                 metrics_val['ssim_val'] = ssim_op(generated_val, original_val).item()
                 metrics_val['psnr_val'] = piq.psnr(generated_val, original_val).item()
                 metrics_val['ms_ssim_val'] = piq.multi_scale_ssim(generated_val, original_val).item()
                 metrics_val['brisque_val'] = piq.brisque(generated_val).item()
-            mlflow.log_metrics(metrics_val, step=epoch_id * progress_bar_val.total + step_id_val)
+            global_step_id_val += 1
+            mlflow.log_metrics(metrics_val, step=global_step_id_val)
             ##################################################################
             # validation_epoch_end - END
 
@@ -221,12 +150,33 @@ def main(cfg: Gifnoc):
 
 
 if __name__ == "__main__":
-    cfg = get_default_config()
-    # cfg.params.limit_train_batches = 2
-    # cfg.params.limit_val_batches = 2
-    # cfg.params.num_epochs = 2
-    # cfg.params.unet.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth')
-    # cfg.params.unet.last_epoch_to_resume = 13
 
-    run_unet_experiment(cfg)
-    # run_srunet_experiment(cfg)
+    def run_srunet_experiment(cfg: Gifnoc):
+        experiment = mlflow.set_experiment('SRUNet_training')
+        with mlflow.start_run(
+            experiment_id=experiment.experiment_id,
+            description="Running SR-UNet training",
+        ):
+            mlflow.log_params(cfg.params.stringify())
+            main(cfg)
+
+    def run_unet_experiment(cfg: Gifnoc):
+        mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
+        experiment = mlflow.set_experiment('UNet_training')
+        with mlflow.start_run(
+            experiment_id=experiment.experiment_id,
+            description="Running UNet training",
+        ):
+            mlflow.log_params(cfg.params.stringify())
+            main(cfg)
+
+
+    default_cfg = get_default_config()
+    # default_cfg.params.limit_train_batches = 2
+    # default_cfg.params.limit_val_batches = 2
+    # default_cfg.params.num_epochs = 2
+    # default_cfg.params.unet.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth')
+    default_cfg.params.unet.ckpt_path_to_resume = Path("/homes/students_home/lorenzopalloni/Projects/binarization/artifacts/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth")
+
+    run_unet_experiment(default_cfg)
+    # run_srunet_experiment(default_cfg)

@@ -1,9 +1,10 @@
 TODO List
 ==========
 
+> resume from train.py
+> need a new scripts/eval_image.py
+
 ## high priority
-- resume from `binarization/dataset.py` line 286 (there is an error about the `frame_buffer`)
-- fix: image too big to be loaded and cropped one-by-one
 - train UNet with BVI-DVC
 - eval.py for video + timing
 
@@ -84,3 +85,6 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - try to work with symlinks
 - DONE - set up data
 - DONE - learn how to use `screen` command
+- DONE - fix: image too big to be loaded and cropped one-by-one
+- DONE - add in config buffer_size and n_batches_per_buffer
+- DONE - refactor batch_generator, from function to class

@@ -31,7 +31,7 @@ def process_raw_generated(
 ) -> torch.Tensor:
     """Postprocesses outputs from super-resolution generator models"""
     out = generated
-    out = dataset.inv_min_max_scaler(out)
+    out = datatools.inv_min_max_scaler(out)
     out = out.clip(0, 255)
     out = out / 255.0
     out = inv_adjust_image_for_unet(out, original)
