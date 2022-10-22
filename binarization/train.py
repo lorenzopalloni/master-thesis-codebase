@@ -22,7 +22,7 @@ from binarization.traintools import (
 
 
 def main(cfg: Gifnoc):
-    """Main for training a super-resolution model"""
+    """Main function to train a super-resolution model"""
 
     checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
 
@@ -95,6 +95,13 @@ def main(cfg: Gifnoc):
 
             loss_gen.backward()
             gen_optim.step()
+
+            if (global_step_id + 1) % cfg.params.save_ckpt_every == 0:
+                current_ckpt_path = Path(
+                    checkpoints_dir,
+                    f"{cfg.params.active_model_name}_{epoch_id}_{global_step_id}.pth"
+                )
+                torch.save(gen.state_dict(), current_ckpt_path)
             ##################################################################
             # Generator training step - END
 
@@ -151,16 +158,17 @@ def main(cfg: Gifnoc):
 
 if __name__ == "__main__":
 
-    def run_srunet_experiment(cfg: Gifnoc):
-        experiment = mlflow.set_experiment('SRUNet_training')
-        with mlflow.start_run(
-            experiment_id=experiment.experiment_id,
-            description="Running SR-UNet training",
-        ):
-            mlflow.log_params(cfg.params.stringify())
-            main(cfg)
+    # def run_srunet_experiment(cfg: Gifnoc):
+    #     experiment = mlflow.set_experiment('SRUNet_training')
+    #     with mlflow.start_run(
+    #         experiment_id=experiment.experiment_id,
+    #         description="Running SR-UNet training",
+    #     ):
+    #         mlflow.log_params(cfg.params.stringify())
+    #         main(cfg)
 
     def run_unet_experiment(cfg: Gifnoc):
+        """Launches an mlflow experiment with the standard UNet."""
         mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
         experiment = mlflow.set_experiment('UNet_training')
         with mlflow.start_run(
@@ -175,8 +183,11 @@ if __name__ == "__main__":
     # default_cfg.params.limit_train_batches = 2
     # default_cfg.params.limit_val_batches = 2
     # default_cfg.params.num_epochs = 2
-    # default_cfg.params.unet.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth')
-    default_cfg.params.unet.ckpt_path_to_resume = Path("/homes/students_home/lorenzopalloni/Projects/binarization/artifacts/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth")
+
+    # default_cfg.params.unet.ckpt_path_to_resume = Path(
+    #     default_cfg.paths.artifacts_dir,
+    #     '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth'
+    # )
 
     run_unet_experiment(default_cfg)
     # run_srunet_experiment(default_cfg)
