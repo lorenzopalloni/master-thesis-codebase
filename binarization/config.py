@@ -32,13 +32,14 @@ class ParamsConfig:
     dis_lr: float = 1e-4
     gen_lr: float = 1e-4
     patch_size: int = 96
-    batch_size: int = 16  # {8, 32}
+    batch_size: int = 32  # {8, 32}
     buffer_size: int = 32
-    n_batches_per_buffer: int = 8
+    n_batches_per_buffer: int = 128  # {8, 32}
     limit_train_batches: int | None = None
     limit_val_batches: int | None = None
+    save_ckpt_every: int = 20_000
     num_workers: int = 1  # {1, 12}
-    num_epochs: int = 100
+    num_epochs: int = 6
     w0: float = 1e-0  # LPIPS weight
     w1: float = 1e-0  # SSIM weight
     w2: float = 1e-3  # Adversarial loss weight
