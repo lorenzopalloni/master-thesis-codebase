@@ -1,8 +1,8 @@
 """Module to train a super-resolution model"""
 
-from datetime import datetime
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, Tuple, Union
 
 import lpips
 import mlflow
@@ -10,52 +10,21 @@ import piq
 import torch
 from tqdm import tqdm
 
-from binarization import dataset, models
-from binarization.config import Gifnoc, default_config
+from binarization import models
+from binarization.dataset import get_train_batches, get_val_batches
+from binarization.config import Gifnoc, get_default_config
 from binarization.vaccaro import pytorch_ssim
-
-
-def set_up_artifacts_dirs(artifacts_dir: Path) -> Tuple[Path, Path]:
-    """Sets up unique-time-related dirs for model checkpoints and runs"""
-    str_now = datetime.now().strftime(r"%Y_%m_%d_%H_%M_%S")
-
-    checkpoints_dir = Path(artifacts_dir, 'checkpoints', str_now)
-    runs_dir = Path(artifacts_dir, 'runs', str_now)
-
-    runs_dir.mkdir(parents=True, exist_ok=True)
-    checkpoints_dir.mkdir(parents=True, exist_ok=True)
-
-    return checkpoints_dir, runs_dir
-
-
-def set_up_unet(cfg: Gifnoc) -> models.UNet:
-    """Instantiates a UNet, resuming model weights if provided"""
-    generator = models.UNet(
-        num_filters=cfg.params.unet.num_filters,
-        use_residual=cfg.params.unet.use_residual,
-        use_batch_norm=cfg.params.unet.use_batch_norm,
-        scale_factor=cfg.params.unet.scale_factor
-    )
-    if cfg.params.ckpt_path_to_resume:
-        print(f'>>> resume from {cfg.params.ckpt_path_to_resume}')
-        generator.load_state_dict(torch.load(cfg.params.ckpt_path_to_resume.as_posix()))
-    return generator
-
-
-def get_starting_epoch_id(ckpt_path_to_resume: Path) -> int:
-    """Extract the epoch id from the ckpt resuming path, if possible"""
-    try:
-        return int(Path(ckpt_path_to_resume).stem.split('_')[-1]) + 1
-    except (ValueError, TypeError):
-        return 0
+from binarization.traintools import (
+    set_cuda_device,
+    set_up_checkpoints_dir,
+    set_up_unet,
+)
 
 
 def main(cfg: Gifnoc):
-    """Main for training a super-resolution model"""
+    """Main function to train a super-resolution model"""
 
-    mlflow.log_params(cfg.params.stringify())
-    checkpoints_dir, runs_dir = set_up_artifacts_dirs(cfg.paths.artifacts_dir)
-    # mlflow.set_tracking_uri(runs_dir)
+    checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
 
     gen = set_up_unet(cfg=cfg)
     dis = models.Discriminator()
@@ -68,21 +37,21 @@ def main(cfg: Gifnoc):
     lpips_alex_metric_op = lpips.LPIPS(net='alex', version='0.1')
     bce_loss_op = torch.nn.BCELoss()
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = set_cuda_device(verbose=True)
     gen.to(device)
     dis.to(device)
     lpips_vgg_loss_op.to(device)
     lpips_alex_metric_op.to(device)
-    print(f'INFO: current device: {device}')
-
-    dl_train, dl_val, dl_test = dataset.make_dataloaders(cfg=cfg)
 
     global_step_id = 0
+    global_step_id_val = 0
 
-    starting_epoch_id = get_starting_epoch_id(cfg.params.ckpt_path_to_resume)
+    starting_epoch_id = cfg.params.unet.starting_epoch_id
     for epoch_id in range(starting_epoch_id, cfg.params.num_epochs):
-        progress_bar_train = tqdm(dl_train, total=cfg.params.limit_train_batches)
-        for step_id_train, (compressed, original) in enumerate(progress_bar_train):
+        train_batches = get_train_batches(cfg)
+        progress_bar_train = tqdm(train_batches, total=cfg.params.limit_train_batches)
+        for step_id_train, (original, compressed) in enumerate(progress_bar_train):
             # training_step - START
             ##################################################################
             if (cfg.params.limit_train_batches is not None and step_id_train > cfg.params.limit_train_batches):
@@ -94,8 +63,8 @@ def main(cfg: Gifnoc):
             ##################################################################
             dis_optim.zero_grad()
 
-            compressed = compressed.to(device)
             original = original.to(device)
+            compressed = compressed.to(device)
             generated = gen(compressed)  # maybe clip it in [0, 1]
             pred_original = dis(original)
 
@@ -126,10 +95,17 @@ def main(cfg: Gifnoc):
 
             loss_gen.backward()
             gen_optim.step()
+
+            if (global_step_id + 1) % cfg.params.save_ckpt_every == 0:
+                current_ckpt_path = Path(
+                    checkpoints_dir,
+                    f"{cfg.params.active_model_name}_{epoch_id}_{global_step_id}.pth"
+                )
+                torch.save(gen.state_dict(), current_ckpt_path)
             ##################################################################
             # Generator training step - END
 
-            metrics_train: Dict[str, Union[int, float]] = {}
+            metrics_train: dict[str, int | float] = {}
             metrics_train['epoch_train'] = epoch_id
             metrics_train['loss_dis_train'] = loss_dis.item()
             metrics_train['loss_gen_train'] = loss_gen.item()
@@ -148,38 +124,70 @@ def main(cfg: Gifnoc):
             ##################################################################
             # training_step - END
 
-        progress_bar_val = tqdm(dl_val, total=cfg.params.limit_val_batches)
-        for step_id_val, (compressed_val, original_val) in enumerate(progress_bar_val):
+        val_batches = get_val_batches(cfg)
+        progress_bar_val = tqdm(val_batches, total=cfg.params.limit_val_batches)
+        for step_id_val, (original_val, compressed_val) in enumerate(progress_bar_val):
             # validation_step - START
             ##################################################################
             if (cfg.params.limit_val_batches is not None and step_id_val > cfg.params.limit_val_batches):
                 break
-            compressed_val = compressed_val.to(device)
             original_val = original_val.to(device)
+            compressed_val = compressed_val.to(device)
             gen.eval()
             with torch.no_grad():
                 generated_val = gen(compressed_val).clip(0, 1)
-                metrics_val: Dict[str, Union[int, float]] = {}
+                metrics_val: dict[str, int | float] = {}
                 metrics_val['lpips_alex_val'] = lpips_alex_metric_op(generated_val, original_val).mean().item()
                 metrics_val['ssim_val'] = ssim_op(generated_val, original_val).item()
                 metrics_val['psnr_val'] = piq.psnr(generated_val, original_val).item()
                 metrics_val['ms_ssim_val'] = piq.multi_scale_ssim(generated_val, original_val).item()
                 metrics_val['brisque_val'] = piq.brisque(generated_val).item()
-            mlflow.log_metrics(metrics_val, step=epoch_id * progress_bar_val.total + step_id_val)
+            global_step_id_val += 1
+            mlflow.log_metrics(metrics_val, step=global_step_id_val)
             ##################################################################
             # validation_epoch_end - END
 
         # training_epoch_end - START
         ##################################################################
-        current_ckpt_path = Path(checkpoints_dir, f"epoch_{epoch_id}.pth")
+        current_ckpt_path = Path(checkpoints_dir, f"{cfg.params.active_model_name}_{epoch_id}_{global_step_id}.pth")
         torch.save(gen.state_dict(), current_ckpt_path)
         ##################################################################
         # training_epoch_end - END
+    mlflow.log_artifacts(checkpoints_dir)
 
 
 if __name__ == "__main__":
-    default_config.params.limit_train_batches = 2
-    default_config.params.limit_val_batches = 2
-    default_config.params.num_epochs = 16
-    default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth')
-    main(default_config)
+
+    # def run_srunet_experiment(cfg: Gifnoc):
+    #     experiment = mlflow.set_experiment('SRUNet_training')
+    #     with mlflow.start_run(
+    #         experiment_id=experiment.experiment_id,
+    #         description="Running SR-UNet training",
+    #     ):
+    #         mlflow.log_params(cfg.params.stringify())
+    #         main(cfg)
+
+    def run_unet_experiment(cfg: Gifnoc):
+        """Launches an mlflow experiment with the standard UNet."""
+        mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
+        experiment = mlflow.set_experiment('UNet_training')
+        with mlflow.start_run(
+            experiment_id=experiment.experiment_id,
+            description="Running UNet training",
+        ):
+            mlflow.log_params(cfg.params.stringify())
+            main(cfg)
+
+
+    default_cfg = get_default_config()
+    # default_cfg.params.limit_train_batches = 2
+    # default_cfg.params.limit_val_batches = 2
+    # default_cfg.params.num_epochs = 2
+
+    # default_cfg.params.unet.ckpt_path_to_resume = Path(
+    #     default_cfg.paths.artifacts_dir,
+    #     '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth'
+    # )
+
+    run_unet_experiment(default_cfg)
+    # run_srunet_experiment(default_cfg)

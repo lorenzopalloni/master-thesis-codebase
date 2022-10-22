@@ -1,15 +1,13 @@
 TODO List
 ==========
 
-> next checkpoint's agenda:
-    - workstation access
+> resume from train.py
+> need a new scripts/eval_image.py
 
 ## high priority
+- train UNet with BVI-DVC
 - eval.py for video + timing
 
-- set up ws
-- download BVI-DVC on ws
-- train UNet with BVI-DVC
 - train SR-UNet with BVI-DVC
 - train with/without ssim
 
@@ -19,15 +17,10 @@ TODO List
 ## medium priority
 - check structural reparametrization in DiracNets and RepVGG
 - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
-- the Professor suggests Comet.ml, but I'll check mlflow also since I'm using it at work
 
 ---
 
 ## low priority
-- refactor CustomPyTorchDataset class:
-    - rename it ?
-    - use function composition
-    - extract a transform function removing all internal preprocessing
 - pay attention in piq: LPIPS seems to yield different results than in the
     original implementation
 
@@ -35,8 +28,7 @@ TODO List
 An alternative to the official BVI-DVC dataset can be found at [https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
 Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences, and this alternative contains only 772 sequences, and it is 83.8GB big.
 
-## Videos from [Derf's collection](https://media.xiph.org/video/derf/) used
-by Vaccaro in his paper as an extra test dataset:
+## Videos from [Derf's collection](https://media.xiph.org/video/derf/) used by Vaccaro in his paper as an extra test dataset:
 + -> downloaded on Alienware-M15
 - -> not yet downloaded on Alienware-M15
     + `ducks_take_off`
@@ -88,4 +80,11 @@ by Vaccaro in his paper as an extra test dataset:
 - DONE - log params with mlflow
 - DONE - replace tensorboard with mlflow
 - DONE - set up a couple of sample experiments with mlflow
-
+- DONE - set up ws
+- DONE - download BVI-DVC on ws (it was already there)
+- DONE - try to work with symlinks
+- DONE - set up data
+- DONE - learn how to use `screen` command
+- DONE - fix: image too big to be loaded and cropped one-by-one
+- DONE - add in config buffer_size and n_batches_per_buffer
+- DONE - refactor batch_generator, from function to class

@@ -293,19 +293,6 @@ def layer_generator(
     )
 
 
-def sr_espcn(n_filters, scale_factor=2, out_channels=3, kernel_size=1):
-    return nn.Sequential(
-        *(
-            nn.Conv2d(
-                kernel_size=kernel_size,
-                in_channels=n_filters,
-                out_channels=(scale_factor**2) * out_channels,
-                padding=kernel_size // 2,
-            ),
-            nn.PixelShuffle(scale_factor),
-        )
-    )
-
 
 class UNet(nn.Module):
     def __init__(
@@ -459,212 +446,226 @@ class UNet(nn.Module):
                     block.reparametrize_convs()
 
 
-class SRUNet(nn.Module):
-    def __init__(
-        self,
-        in_dim=3,
-        n_class=3,
-        downsample=None,
-        residual=False,
-        batchnorm=False,
-        scale_factor=2,
-        n_filters=64,
-        layer_multiplier=1,
-    ):
-        """
-        Args:
-            in_dim (float, optional):
-                channel dimension of the input
-            n_class (str):
-                channel dimension of the output
-            n_filters (int, optional):
-                maximum number of filters. the layers start with n_filters / 2,  after each layer this number gets multiplied by 2
-                 during the encoding stage and until it reaches n_filters. During the decoding stage the number follows the reverse
-                 scheme. Default is 64
-            downsample (None or float, optional)
-                can be used for downscaling the output. e.g., if you use downsample=0.5 the output resolution will be halved
-            residual (bool):
-                if using the residual scheme and adding the input to the final output
-            scale_factor (int):
-                upscale factor. if you want a rational upscale (e.g. 720p to 1080p, which is 1.5) combine it
-                 with the downsample parameter
-            layer_multiplier (int or float):
-                compress or extend the network depth in terms of total layers. configured as a multiplier to the number of the
-                basic blocks which composes the layers
-            batchnorm (bool, default=False):
-                whether use batchnorm or not. If True should decrease quality and performances.
-        """
-
-        super().__init__()
-
-        self.residual = residual
-        self.n_class = n_class
-        self.scale_factor = scale_factor
-
-        self.dconv_down1 = layer_generator(
-            in_dim,
-            n_filters // 2,
-            use_batch_norm=False,
-            n_blocks=2 * layer_multiplier,
-        )
-        self.dconv_down2 = layer_generator(
-            n_filters // 2,
-            n_filters,
-            use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
-        )
-        self.dconv_down3 = layer_generator(
-            n_filters,
-            n_filters,
-            use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
-        )
-        self.dconv_down4 = layer_generator(
-            n_filters,
-            n_filters,
-            use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
-        )
-
-        self.maxpool = nn.MaxPool2d(2)
-        if downsample is not None and downsample != 1.0:
-            self.downsample = nn.Upsample(
-                scale_factor=downsample, mode='bicubic', align_corners=True
-            )
-        else:
-            self.downsample = nn.Identity()
-        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
-
-        self.dconv_up3 = layer_generator(
-            n_filters + n_filters,
-            n_filters,
-            use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
-        )
-        self.dconv_up2 = layer_generator(
-            n_filters + n_filters,
-            n_filters,
-            use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
-        )
-        self.dconv_up1 = layer_generator(
-            n_filters + n_filters // 2,
-            n_filters // 2,
-            use_batch_norm=False,
-            n_blocks=3 * layer_multiplier,
-        )
-
-        self.layers = [
-            self.dconv_down1,
-            self.dconv_down2,
-            self.dconv_down3,
-            self.dconv_down4,
-            self.dconv_up3,
-            self.dconv_up2,
-            self.dconv_up1,
-        ]
-
-        sf = self.scale_factor
-
-        self.to_rgb = nn.Conv2d(n_filters // 2, 3, kernel_size=1)
-        if sf > 1:
-            self.conv_last = nn.Conv2d(
-                n_filters // 2, (sf**2) * n_class, kernel_size=1, padding=0
-            )
-            self.pixel_shuffle = nn.PixelShuffle(sf)
-        else:
-            self.conv_last = nn.Conv2d(n_filters // 2, 3, kernel_size=1)
-
-    def forward(self, input):
-        x = input
-
-        conv1 = self.dconv_down1(x)
-        x = self.maxpool(conv1)
-
-        conv2 = self.dconv_down2(x)
-        x = self.maxpool(conv2)
-
-        conv3 = self.dconv_down3(x)
-        x = self.maxpool(conv3)
-
-        x = self.dconv_down4(x)
-
-        x = self.upsample(x)
-        x = torch.cat([x, conv3], dim=1)
-
-        x = self.dconv_up3(x)
-        x = self.upsample(x)
-        x = torch.cat([x, conv2], dim=1)
-
-        x = self.dconv_up2(x)
-        x = self.upsample(x)
-        x = torch.cat([x, conv1], dim=1)
-
-        x = self.dconv_up1(x)
-
-        x = self.conv_last(x)
-
-        sf = self.scale_factor
-
-        if sf > 1:
-            x = self.pixel_shuffle(x)
-
-        # x = self.to_rgb(x)
-        if self.residual:
-            sf = (
-                self.scale_factor
-            )  # (self.scale_factor // (2 if self.use_s2d and self.scale_factor > 1 else 1))
-            x += nn.functional.interpolate(
-                input[:, -self.n_class :, :, :],
-                scale_factor=sf,
-                mode='bicubic',
-            )
-            x = torch.clamp(x, min=-1, max=1)
-
-        return torch.clamp(
-            self.downsample(x), min=-1, max=1
-        )  # self.downsample(x)
-
-    def reparametrize(self):
-        for layer in self.layers:
-            for block in layer:
-                if hasattr(block, 'conv_adapter'):
-                    block.reparametrize_convs()
+# def sr_espcn(n_filters, scale_factor=2, out_channels=3, kernel_size=1):
+#     return nn.Sequential(
+#         *(
+#             nn.Conv2d(
+#                 kernel_size=kernel_size,
+#                 in_channels=n_filters,
+#                 out_channels=(scale_factor**2) * out_channels,
+#                 padding=kernel_size // 2,
+#             ),
+#             nn.PixelShuffle(scale_factor),
+#         )
+#     )
 
 
-class SimpleResNet(nn.Module):
-    def __init__(self, n_filters, n_blocks):
-        super(SimpleResNet, self).__init__()
-        self.conv1 = UNetBlock(
-            in_channels=3,
-            out_channels=n_filters,
-            use_residual=True,
-            use_batch_norm=False,
-        )
-        convblock = [
-            UNetBlock(
-                in_channels=n_filters,
-                out_channels=n_filters,
-                use_residual=True,
-                use_batch_norm=False,
-            )
-            for _ in range(n_blocks - 1)
-        ]
-        self.convblocks = nn.Sequential(*convblock)
-        self.sr = sr_espcn(n_filters, scale_factor=2, out_channels=3)
-        self.upscale = nn.Upsample(
-            scale_factor=2, mode='bicubic', align_corners=True
-        )
-        self.clip = nn.Hardtanh()
+# class SRUNet(nn.Module):
+#     def __init__(
+#         self,
+#         in_dim=3,
+#         n_class=3,
+#         downsample=None,
+#         residual=False,
+#         batchnorm=False,
+#         scale_factor=2,
+#         n_filters=64,
+#         layer_multiplier=1,
+#     ):
+#         """
+#         Args:
+#             in_dim (float, optional):
+#                 channel dimension of the input
+#             n_class (str):
+#                 channel dimension of the output
+#             n_filters (int, optional):
+#                 maximum number of filters. the layers start with n_filters / 2,  after each layer this number gets multiplied by 2
+#                  during the encoding stage and until it reaches n_filters. During the decoding stage the number follows the reverse
+#                  scheme. Default is 64
+#             downsample (None or float, optional)
+#                 can be used for downscaling the output. e.g., if you use downsample=0.5 the output resolution will be halved
+#             residual (bool):
+#                 if using the residual scheme and adding the input to the final output
+#             scale_factor (int):
+#                 upscale factor. if you want a rational upscale (e.g. 720p to 1080p, which is 1.5) combine it
+#                  with the downsample parameter
+#             layer_multiplier (int or float):
+#                 compress or extend the network depth in terms of total layers. configured as a multiplier to the number of the
+#                 basic blocks which composes the layers
+#             batchnorm (bool, default=False):
+#                 whether use batchnorm or not. If True should decrease quality and performances.
+#         """
 
-    def forward(self, input):
-        x = self.conv1(input)
-        x = self.convblocks(x)
-        x = self.sr(x)
+#         super().__init__()
 
-        return self.clip(x + self.upscale(input))
+#         self.residual = residual
+#         self.n_class = n_class
+#         self.scale_factor = scale_factor
 
-    def reparametrize(self):
-        for block in self.convblocks:
-            if hasattr(block, 'conv_adapter'):
-                block.reparametrize_convs()
+#         self.dconv_down1 = layer_generator(
+#             in_dim,
+#             n_filters // 2,
+#             use_batch_norm=False,
+#             n_blocks=2 * layer_multiplier,
+#         )
+#         self.dconv_down2 = layer_generator(
+#             n_filters // 2,
+#             n_filters,
+#             use_batch_norm=batchnorm,
+#             n_blocks=3 * layer_multiplier,
+#         )
+#         self.dconv_down3 = layer_generator(
+#             n_filters,
+#             n_filters,
+#             use_batch_norm=batchnorm,
+#             n_blocks=3 * layer_multiplier,
+#         )
+#         self.dconv_down4 = layer_generator(
+#             n_filters,
+#             n_filters,
+#             use_batch_norm=batchnorm,
+#             n_blocks=3 * layer_multiplier,
+#         )
+
+#         self.maxpool = nn.MaxPool2d(2)
+#         if downsample is not None and downsample != 1.0:
+#             self.downsample = nn.Upsample(
+#                 scale_factor=downsample, mode='bicubic', align_corners=True
+#             )
+#         else:
+#             self.downsample = nn.Identity()
+#         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
+
+#         self.dconv_up3 = layer_generator(
+#             n_filters + n_filters,
+#             n_filters,
+#             use_batch_norm=batchnorm,
+#             n_blocks=3 * layer_multiplier,
+#         )
+#         self.dconv_up2 = layer_generator(
+#             n_filters + n_filters,
+#             n_filters,
+#             use_batch_norm=batchnorm,
+#             n_blocks=3 * layer_multiplier,
+#         )
+#         self.dconv_up1 = layer_generator(
+#             n_filters + n_filters // 2,
+#             n_filters // 2,
+#             use_batch_norm=False,
+#             n_blocks=3 * layer_multiplier,
+#         )
+
+#         self.layers = [
+#             self.dconv_down1,
+#             self.dconv_down2,
+#             self.dconv_down3,
+#             self.dconv_down4,
+#             self.dconv_up3,
+#             self.dconv_up2,
+#             self.dconv_up1,
+#         ]
+
+#         sf = self.scale_factor
+
+#         self.to_rgb = nn.Conv2d(n_filters // 2, 3, kernel_size=1)
+#         if sf > 1:
+#             self.conv_last = nn.Conv2d(
+#                 n_filters // 2, (sf**2) * n_class, kernel_size=1, padding=0
+#             )
+#             self.pixel_shuffle = nn.PixelShuffle(sf)
+#         else:
+#             self.conv_last = nn.Conv2d(n_filters // 2, 3, kernel_size=1)
+
+#     def forward(self, input):
+#         x = input
+
+#         conv1 = self.dconv_down1(x)
+#         x = self.maxpool(conv1)
+
+#         conv2 = self.dconv_down2(x)
+#         x = self.maxpool(conv2)
+
+#         conv3 = self.dconv_down3(x)
+#         x = self.maxpool(conv3)
+
+#         x = self.dconv_down4(x)
+
+#         x = self.upsample(x)
+#         x = torch.cat([x, conv3], dim=1)
+
+#         x = self.dconv_up3(x)
+#         x = self.upsample(x)
+#         x = torch.cat([x, conv2], dim=1)
+
+#         x = self.dconv_up2(x)
+#         x = self.upsample(x)
+#         x = torch.cat([x, conv1], dim=1)
+
+#         x = self.dconv_up1(x)
+
+#         x = self.conv_last(x)
+
+#         sf = self.scale_factor
+
+#         if sf > 1:
+#             x = self.pixel_shuffle(x)
+
+#         # x = self.to_rgb(x)
+#         if self.residual:
+#             sf = (
+#                 self.scale_factor
+#             )  # (self.scale_factor // (2 if self.use_s2d and self.scale_factor > 1 else 1))
+#             x += nn.functional.interpolate(
+#                 input[:, -self.n_class :, :, :],
+#                 scale_factor=sf,
+#                 mode='bicubic',
+#             )
+#             x = torch.clamp(x, min=-1, max=1)
+
+#         return torch.clamp(
+#             self.downsample(x), min=-1, max=1
+#         )  # self.downsample(x)
+
+#     def reparametrize(self):
+#         for layer in self.layers:
+#             for block in layer:
+#                 if hasattr(block, 'conv_adapter'):
+#                     block.reparametrize_convs()
+
+
+# class SimpleResNet(nn.Module):
+#     def __init__(self, n_filters, n_blocks):
+#         super().__init__()
+#         self.conv1 = UNetBlock(
+#             in_channels=3,
+#             out_channels=n_filters,
+#             use_residual=True,
+#             use_batch_norm=False,
+#         )
+#         convblock = [
+#             UNetBlock(
+#                 in_channels=n_filters,
+#                 out_channels=n_filters,
+#                 use_residual=True,
+#                 use_batch_norm=False,
+#             )
+#             for _ in range(n_blocks - 1)
+#         ]
+#         self.convblocks = nn.Sequential(*convblock)
+#         self.sr = sr_espcn(n_filters, scale_factor=2, out_channels=3)
+#         self.upscale = nn.Upsample(
+#             scale_factor=2, mode='bicubic', align_corners=True
+#         )
+#         self.clip = nn.Hardtanh()
+
+#     def forward(self, input):
+#         x = self.conv1(input)
+#         x = self.convblocks(x)
+#         x = self.sr(x)
+
+#         return self.clip(x + self.upscale(input))
+
+#     def reparametrize(self):
+#         for block in self.convblocks:
+#             if hasattr(block, 'conv_adapter'):
+#                 block.reparametrize_convs()
