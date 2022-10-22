@@ -113,6 +113,31 @@ def adjust_image_for_unet(image: torch.Tensor) -> torch.Tensor:
         ],
     )
 
+def inv_adjust_image_for_unet(
+    original: torch.Tensor, generated: torch.Tensor
+) -> torch.Tensor:
+    """Crops as much as needed to invert `adjust_image_for_unet`."""
+    height_original, width_original = original.shape[-2], original.shape[-1]
+    height_generated, width_generated = (
+        generated.shape[-2],
+        generated.shape[-1],
+    )
+    height_offset = (height_generated - height_original) // 2
+    width_offset = (width_generated - width_original) // 2
+    return F.crop(
+        generated, height_offset, width_offset, height_original, width_original
+    )
+
+
+def process_raw_generated(
+    original: torch.Tensor, generated: torch.Tensor
+) -> torch.Tensor:
+    """Postprocesses outputs from super-resolution generator models"""
+    generated = inv_min_max_scaler(generated)
+    generated = generated.clip(0, 255)
+    generated = generated / 255.0
+    return inv_adjust_image_for_unet(original=original, generated=generated)
+
 
 def draw_validation_fig(
     original_image: torch.Tensor,
