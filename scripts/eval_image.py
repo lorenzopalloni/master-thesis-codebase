@@ -1,83 +1,58 @@
-"""Script to evaluate a trained super-resolution model"""
+# pylint: disable=missing-function-docstring
+"""Script to evaluate a super-resolution model"""
 
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import torch
-import torchvision.transforms.functional as F
 from tqdm import tqdm
 
-from binarization import dataset, train
 from binarization.config import Gifnoc, get_default_config
+from binarization.dataset import get_test_batches
+from binarization.datatools import (
+    adjust_image_for_unet,
+    draw_validation_fig,
+    process_raw_generated,
+)
+from binarization.traintools import (
+    set_cuda_device,
+    set_up_unet,
+)
 
-
-def inv_adjust_image_for_unet(
-    generated: torch.Tensor, original: torch.Tensor
-) -> torch.Tensor:
-    height_generated, width_generated = (
-        generated.shape[-2],
-        generated.shape[-1],
-    )
-    height_original, width_original = original.shape[-2], original.shape[-1]
-    height_offset = (height_generated - height_original) // 2
-    width_offset = (width_generated - width_original) // 2
-    return F.crop(
-        generated, height_offset, width_offset, height_original, width_original
-    )
-
-
-def process_raw_generated(
-    generated: torch.Tensor, original: torch.Tensor
-) -> torch.Tensor:
-    """Postprocesses outputs from super-resolution generator models"""
-    out = generated
-    out = datatools.inv_min_max_scaler(out)
-    out = out.clip(0, 255)
-    out = out / 255.0
-    out = inv_adjust_image_for_unet(out, original)
-    return out
-
-
-def main(cfg: Gifnoc):
+def main(cfg: Gifnoc, n_evaluations: int):
     save_dir = cfg.paths.outputs_dir / cfg.params.ckpt_path_to_resume.stem
     save_dir.mkdir(exist_ok=True, parents=True)
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    whole_images_dataset = dataset.WholeImagesDataset(
-        original_frames_dir=cfg.paths.val_original_frames_dir,
-        compressed_frames_dir=cfg.paths.val_compressed_frames_dir,
-    )
-    dl_val = dataset.DataLoader(
-        dataset=whole_images_dataset,
-        batch_size=cfg.params.batch_size,
-        shuffle=None,
-    )
-    progress_bar_val = tqdm(dl_val)
-    gen = train.set_up_unet(cfg)
+
+    device = set_cuda_device()
+    gen = set_up_unet(cfg)
     gen.to(device)
+
+    test_batches = get_test_batches(cfg)
+    progress_bar = tqdm(test_batches)
+
     counter = 0
-    for step_id_val, (compressed_val, original_val) in enumerate(
-        progress_bar_val
-    ):
+    for step_id, (original, compressed) in enumerate(progress_bar):
+        if step_id > n_evaluations - 1:
+            break
 
-        compressed_val = compressed_val.to(device)
-        original_val = original_val.to(device)
-
-        compressed_val = dataset.adjust_image_for_unet(compressed_val)
+        original = original.to(device)
+        compressed = compressed.to(device)
+        compressed = adjust_image_for_unet(compressed)
 
         gen.eval()
         with torch.no_grad():
-            generated_val = gen(compressed_val)
+            generated = gen(compressed)
 
-        original_val = original_val.cpu()
-        generated_val = generated_val.cpu()
-        compressed_val = compressed_val.cpu()
-        generated_val = process_raw_generated(generated_val, original_val)
+        original = original.cpu()
+        compressed = compressed.cpu()
+        generated = generated.cpu()
+        generated = process_raw_generated(original=original, generated=generated)
 
-        for i in range(original_val.shape[0]):
-            fig = dataset.draw_validation_fig(
-                original_image=original_val[i],
-                compressed_image=compressed_val[i],
-                generated_image=generated_val[i],
+        for i in range(original.shape[0]):
+            fig = draw_validation_fig(
+                original_image=original[i],
+                compressed_image=compressed[i],
+                generated_image=generated[i],
             )
             save_path = save_dir / f'validation_fig_{counter}.jpg'
             counter += 1
@@ -86,10 +61,9 @@ def main(cfg: Gifnoc):
 
 
 if __name__ == "__main__":
-    cfg = get_default_config()
-    # default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_28_epoch_9.pth')
-    cfg.params.ckpt_path_to_resume = Path(
-        '/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth'
+    default_cfg = get_default_config()
+    default_cfg.params.ckpt_path_to_resume = Path(
+        default_cfg.paths.artifacts_dir, "/checkpoints/2022_10_21_07_54_20/unet_0_59999.pth"
     )
-    cfg.params.batch_size = 10
-    main(cfg)
+    default_cfg.params.buffer_size: int = 1
+    main(default_cfg, n_evaluations=128)
