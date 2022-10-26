@@ -3,8 +3,9 @@ import pytest
 from scripts.video_preprocessing import (
     all_files_have_the_same_extension,
     prepare_directories,
-    prepare_original_dir,
+    prepare_original_videos_dir,
 )
+
 
 class TestAllFilesHaveTheSameExtension:
     def test_when_false(self, tmp_path):
@@ -34,14 +35,14 @@ class TestPrepareOriginalDir:
         (d / 'a.mp4').touch()
         (d / 'b.txt').touch()
         with pytest.raises(Exception):
-            prepare_original_dir(d)
+            prepare_original_videos_dir(d)
 
     def test_case1(self, tmp_path):
         d = tmp_path / 'data'
         d.mkdir()
         (d / 'a.mp4').touch()
         (d / 'b.mp4').touch()
-        original_dir = prepare_original_dir(d)
+        original_dir = prepare_original_videos_dir(d)
         assert not (d / 'a.mp4').exists()
         assert not (d / 'b.mp4').exists()
         assert (original_dir / 'a.mp4').exists()
@@ -54,7 +55,7 @@ class TestPrepareOriginalDir:
         original_dir.mkdir()
         (original_dir / 'a.mp4').touch()
         (original_dir / 'b.mp4').touch()
-        original_dir = prepare_original_dir(data_dir)
+        original_dir = prepare_original_videos_dir(data_dir)
         assert not (data_dir / 'a.mp4').exists()
         assert not (data_dir / 'b.mp4').exists()
         assert (original_dir / 'a.mp4').exists()
@@ -67,7 +68,7 @@ class TestPrepareOriginalDir:
         original_dir.mkdir()
         (original_dir / 'a.mp4').touch()
         (original_dir / 'b.mp4').touch()
-        original_dir = prepare_original_dir(original_dir)
+        original_dir = prepare_original_videos_dir(original_dir)
         assert not (data_dir / 'a.mp4').exists()
         assert not (data_dir / 'b.mp4').exists()
         assert (original_dir / 'a.mp4').exists()
@@ -82,7 +83,7 @@ class TestPrepareOriginalDir:
         (original_dir / 'b.mp4').touch()
         (data_dir / 'c.mp4').touch()
         with pytest.raises(Exception):
-            prepare_original_dir(original_dir)
+            prepare_original_videos_dir(original_dir)
 
 
 def test_prepare_directories(tmp_path):
@@ -100,7 +101,7 @@ def test_prepare_directories(tmp_path):
         original_dir,
         compressed_videos_dir,
         original_frames_dir,
-        encoded_frames_dir
+        encoded_frames_dir,
     )
     assert (d / 'compressed_videos').is_dir()
     assert (d / 'original_frames').is_dir()

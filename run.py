@@ -1,10 +1,11 @@
 """Collection of scripts for general package-level utilities"""
 
-import os
 import argparse
+import os
 import subprocess
 from pathlib import Path
 from typing import Callable, Dict
+
 
 def check_venv(venv_name: str):
     """Raises an exception if a specific virtual env is not currently active"""
@@ -16,7 +17,7 @@ def check_venv(venv_name: str):
 def set_up_test_assets(project_dir: Path = None):
     """Sets up resources for testing"""
     if project_dir is None:
-        project_dir = Path()
+        project_dir = Path(__file__).parent
     tests_dir = project_dir / 'tests'
     assets_dir = tests_dir / 'assets'
     original_videos_dir = assets_dir / 'original_videos'
@@ -63,6 +64,7 @@ def run_coverage():
 
 
 def parse_args(command_dict: Dict[str, Callable]) -> argparse.Namespace:
+    """Argument parser."""
     parser = argparse.ArgumentParser(
         prog='python run.py', description='Run custom configurations.'
     )

@@ -98,46 +98,66 @@ def assure_same_extension_among_files(
     )
 
 
-def prepare_original_dir(input_dir: Union[Path, str]) -> Path:
+def prepare_original_videos_dir(
+    input_dir: Union[Path, str],
+    original_videos_namedir: str = 'original_videos',
+) -> Path:
+    """Assures a standard directory structure for original videos."""
+    original_videos_namedir = 'original_videos'
     input_dir = Path(input_dir)
 
-    case1 = input_dir.resolve().name != 'original_videos'
-    case11 = case1 and (input_dir / 'original_videos').is_dir()
-    case2 = input_dir.resolve().name == 'original_videos'
+    case1 = input_dir.resolve().name != original_videos_namedir
+    case11 = case1 and (input_dir / original_videos_namedir).is_dir()
+    case2 = input_dir.resolve().name == original_videos_namedir
 
     if case11:
-        original_dir = input_dir / 'original_videos'
-        assure_same_extension_among_files(original_dir)
+        original_videos_dir = input_dir / original_videos_namedir
+        assure_same_extension_among_files(original_videos_dir)
     elif case1:
         assure_same_extension_among_files(input_dir)
-        (original_dir := input_dir / 'original_videos').mkdir()
-        # move all files in <input_dir>/ to <input_dir>/original, excluding
-        # the latter
+        (original_videos_dir := input_dir / original_videos_namedir).mkdir()
+        # mv <input_dir>/* -t <input_dir>/<original_videos_namedir>/
         for video_fp in input_dir.iterdir():
-            if video_fp != original_dir:
-                shutil.move(video_fp.as_posix(), original_dir.as_posix())
+            if video_fp != original_videos_dir:
+                shutil.move(
+                    video_fp.as_posix(), original_videos_dir.as_posix()
+                )
     elif case2:
         assure_same_extension_among_files(input_dir)
-        original_dir = input_dir
-        if not len(list(original_dir.parent.iterdir())) == 1:
+        original_videos_dir = input_dir
+        if not len(list(original_videos_dir.parent.iterdir())) == 1:
             raise Exception(
-                f'"{original_dir.parent.resolve().as_posix()}" is expected to'
-                ' contain only `./original`, without any other files.'
+                f'"{original_videos_dir.parent.resolve().as_posix()}" is expected to'
+                f' contain only `./{original_videos_namedir}`, without any '
+                'other files.'
             )
-    return original_dir
+    return original_videos_dir
 
 
 def prepare_directories(
-    input_dir: Union[Path, str]
+    input_dir: Union[Path, str],
+    original_videos_namedir: str = 'original_videos',
 ) -> Tuple[Path, Path, Path, Path]:
-    original_dir = prepare_original_dir(input_dir)
+    """Assures a standard dir structure for original/compressed videos/frames."""
+    original_dir = prepare_original_videos_dir(
+        input_dir=input_dir, original_videos_namedir=original_videos_namedir
+    )
 
     root_dir = original_dir.parent
-    (compressed_videos_dir := root_dir / 'compressed_videos').mkdir(exist_ok=True)
+    (compressed_videos_dir := root_dir / 'compressed_videos').mkdir(
+        exist_ok=True
+    )
 
     (original_frames_dir := root_dir / 'original_frames').mkdir(exist_ok=True)
-    (compressed_frames_dir := root_dir / 'compressed_frames').mkdir(exist_ok=True)
-    return original_dir, compressed_videos_dir, original_frames_dir, compressed_frames_dir
+    (compressed_frames_dir := root_dir / 'compressed_frames').mkdir(
+        exist_ok=True
+    )
+    return (
+        original_dir,
+        compressed_videos_dir,
+        original_frames_dir,
+        compressed_frames_dir,
+    )
 
 
 def main():
@@ -155,7 +175,9 @@ def main():
     ) = prepare_directories(input_dir)
 
     for original_fn in original_dir.iterdir():
-        compressed_fn = compressed_videos_dir / ('compressed_' + original_fn.stem + '.mp4')
+        compressed_fn = compressed_videos_dir / (
+            'compressed_' + original_fn.stem + '.mp4'
+        )
 
         compress(
             input_fn=original_fn,
@@ -171,7 +193,9 @@ def main():
         video_to_frames(
             input_fn=original_fn, output_dir=original_frames_subdir
         )
-        video_to_frames(input_fn=compressed_fn, output_dir=compressed_frames_subdir)
+        video_to_frames(
+            input_fn=compressed_fn, output_dir=compressed_frames_subdir
+        )
 
 
 if __name__ == '__main__':
