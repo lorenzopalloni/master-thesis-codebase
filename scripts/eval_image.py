@@ -14,10 +14,8 @@ from binarization.datatools import (
     draw_validation_fig,
     process_raw_generated,
 )
-from binarization.traintools import (
-    set_cuda_device,
-    set_up_unet,
-)
+from binarization.traintools import set_cuda_device, set_up_unet
+
 
 def main(cfg: Gifnoc, n_evaluations: int):
     save_dir = cfg.paths.outputs_dir / cfg.params.ckpt_path_to_resume.stem
@@ -46,7 +44,9 @@ def main(cfg: Gifnoc, n_evaluations: int):
         original = original.cpu()
         compressed = compressed.cpu()
         generated = generated.cpu()
-        generated = process_raw_generated(original=original, generated=generated)
+        generated = process_raw_generated(
+            original=original, generated=generated
+        )
 
         for i in range(original.shape[0]):
             fig = draw_validation_fig(
@@ -63,7 +63,8 @@ def main(cfg: Gifnoc, n_evaluations: int):
 if __name__ == "__main__":
     default_cfg = get_default_config()
     default_cfg.params.ckpt_path_to_resume = Path(
-        default_cfg.paths.artifacts_dir, "/checkpoints/2022_10_21_07_54_20/unet_0_59999.pth"
+        default_cfg.paths.artifacts_dir,
+        "/checkpoints/2022_10_21_07_54_20/unet_0_59999.pth",
     )
-    default_cfg.params.buffer_size: int = 1
+    default_cfg.params.buffer_size = 1
     main(default_cfg, n_evaluations=128)

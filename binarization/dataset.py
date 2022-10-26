@@ -18,10 +18,10 @@ from sklearn.model_selection import train_test_split
 from torchvision.utils import Image
 
 from binarization.datatools import (
+    list_directories,
+    list_files,
     min_max_scaler,
     random_crop_images,
-    list_files,
-    list_directories,
 )
 
 
@@ -117,9 +117,10 @@ def make_splits(
 def get_splits(
     cfg: Gifnoc, exist_ok: bool = True, random_state: int = 42
 ) -> dict[str, list[str]]:
-    """Fetches `data_dir/splits.json`.
+    """Fetches `<data_dir>/splits.json`.
 
-    If it does not exist, it creates it, then returns it.
+    Returns `<data_dir>/splits.json` if it does exist.
+    Otherwise, this function creates it, then returns it.
 
     Args:
         cfg (Gifnoc): Configuration object.
@@ -147,7 +148,7 @@ def get_splits(
 
 
 class Stage(Enum):
-    """Represents a model stage."""
+    """Model stages: {train, val, test}."""
 
     TRAIN = 'train'
     VAL = 'val'
@@ -395,14 +396,16 @@ class BatchGenerator:
         self.batch_idx += 1
         return torch.stack(original_batch), torch.stack(compressed_batch)
 
+
 def get_train_batches(cfg):
     return BatchGenerator(
         cfg=cfg,
         stage=Stage.TRAIN,
         buffer_size=cfg.params.buffer_size,
         n_batches_per_buffer=cfg.params.n_batches_per_buffer,
-        batch_size=cfg.params.batch_size
+        batch_size=cfg.params.batch_size,
     )
+
 
 def get_val_batches(cfg):
     return BatchGenerator(
@@ -410,8 +413,9 @@ def get_val_batches(cfg):
         stage=Stage.VAL,
         buffer_size=cfg.params.buffer_size,
         n_batches_per_buffer=cfg.params.n_batches_per_buffer,
-        batch_size=cfg.params.batch_size
+        batch_size=cfg.params.batch_size,
     )
+
 
 def get_test_batches(cfg):
     return BatchGenerator(
@@ -419,12 +423,13 @@ def get_test_batches(cfg):
         stage=Stage.TEST,
         buffer_size=cfg.params.buffer_size,
         n_batches_per_buffer=cfg.params.n_batches_per_buffer,
-        batch_size=cfg.params.batch_size
+        batch_size=cfg.params.batch_size,
     )
+
 
 def get_batches(cfg):
     return (
         get_train_batches(cfg),
         get_val_batches(cfg),
-        get_test_batches(cfg)
+        get_test_batches(cfg),
     )

@@ -1,14 +1,18 @@
 TODO List
 ==========
 
+> resume from branch `train_srunet`
 > resume from train.py
-> need a new scripts/eval_image.py
 
 ## high priority
-- train UNet with BVI-DVC
-- eval.py for video + timing
 
+- dry-run experiments (without creating any artifacts)
+- refactor for training with both SR-UNet and standard UNet
 - train SR-UNet with BVI-DVC
+- train UNet with BVI-DVC
+
+- `eval_video.py` (video + timing)
+
 - train with/without ssim
 
 - understand why your way of including ssim was so bad for the training
@@ -86,5 +90,5 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - set up data
 - DONE - learn how to use `screen` command
 - DONE - fix: image too big to be loaded and cropped one-by-one
-- DONE - add in config buffer_size and n_batches_per_buffer
-- DONE - refactor batch_generator, from function to class
+- DONE - add in config `buffer_size` and `n_batches_per_buffer`
+- DONE - refactor `batch_generator`, from function to class
