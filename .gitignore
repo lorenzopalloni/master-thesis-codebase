@@ -1,6 +1,5 @@
 # big-file folders
 data/*
-!data/splits.json
 artifacts/
 checkpoints/
 outputs/
