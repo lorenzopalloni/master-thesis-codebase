@@ -15,18 +15,18 @@ from binarization.dataset import get_train_batches, get_val_batches
 from binarization.config import Gifnoc, get_default_config
 from binarization.vaccaro import pytorch_ssim
 from binarization.traintools import (
-    set_cuda_device,
+    set_up_cuda_device,
     set_up_checkpoints_dir,
-    set_up_unet,
+    set_up_generator,
 )
 
 
-def main(cfg: Gifnoc):
+def run_training(cfg: Gifnoc):
     """Main function to train a super-resolution model"""
 
     checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
 
-    gen = set_up_unet(cfg=cfg)
+    gen = set_up_generator(cfg=cfg)
     dis = models.Discriminator()
 
     gen_optim = torch.optim.Adam(lr=cfg.params.gen_lr, params=gen.parameters())
@@ -37,8 +37,7 @@ def main(cfg: Gifnoc):
     lpips_alex_metric_op = lpips.LPIPS(net='alex', version='0.1')
     bce_loss_op = torch.nn.BCELoss()
 
-    # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    device = set_cuda_device(verbose=True)
+    device = set_up_cuda_device(verbose=True)
     gen.to(device)
     dis.to(device)
     lpips_vgg_loss_op.to(device)
@@ -47,8 +46,7 @@ def main(cfg: Gifnoc):
     global_step_id = 0
     global_step_id_val = 0
 
-    starting_epoch_id = cfg.params.unet.starting_epoch_id
-    for epoch_id in range(starting_epoch_id, cfg.params.num_epochs):
+    for epoch_id in range(cfg.params.num_epochs):
         train_batches = get_train_batches(cfg)
         progress_bar_train = tqdm(train_batches, total=cfg.params.limit_train_batches)
         for step_id_train, (original, compressed) in enumerate(progress_bar_train):
@@ -99,7 +97,7 @@ def main(cfg: Gifnoc):
             if (global_step_id + 1) % cfg.params.save_ckpt_every == 0:
                 current_ckpt_path = Path(
                     checkpoints_dir,
-                    f"{cfg.params.active_model_name}_{epoch_id}_{global_step_id}.pth"
+                    f"{cfg.model.name}_{epoch_id}_{global_step_id}.pth"
                 )
                 torch.save(gen.state_dict(), current_ckpt_path)
             ##################################################################
@@ -149,45 +147,51 @@ def main(cfg: Gifnoc):
 
         # training_epoch_end - START
         ##################################################################
-        current_ckpt_path = Path(checkpoints_dir, f"{cfg.params.active_model_name}_{epoch_id}_{global_step_id}.pth")
+        current_ckpt_path = Path(checkpoints_dir, f"{cfg.model.name}_{epoch_id}_{global_step_id}.pth")
         torch.save(gen.state_dict(), current_ckpt_path)
         ##################################################################
         # training_epoch_end - END
     mlflow.log_artifacts(checkpoints_dir)
 
 
+def run_experiment_with_unet(cfg: Gifnoc):
+    """Launches an mlflow experiment with a standard UNet."""
+
+    cfg.model.name = 'unet'
+    # cfg.model.ckpt_path_to_resume = Path(cfg.paths.artifacts_dir, '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth')
+
+    mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
+    experiment = mlflow.set_experiment('UNet_training')
+    with mlflow.start_run(
+        experiment_id=experiment.experiment_id,
+        description="Running UNet training",
+    ):
+        mlflow.log_params(cfg.params.stringify())
+        mlflow.log_params(cfg.model.stringify())
+        run_training(cfg)
+
+
+def run_experiment_with_srunet(cfg: Gifnoc):
+    """Launches an mlflow experiment with a SR-UNet."""
+
+    cfg.model.name = 'srunet'
+    # cfg.model.ckpt_path_to_resume = Path(cfg.paths.artifacts_dir, '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth')
+
+    mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
+    experiment = mlflow.set_experiment('SRUNet_training')
+    with mlflow.start_run(
+        experiment_id=experiment.experiment_id,
+        description="Running SR-UNet training",
+    ):
+        mlflow.log_params(cfg.params.stringify())
+        mlflow.log_params(cfg.model.stringify())
+        run_training(cfg)
+
+
 if __name__ == "__main__":
-
-    # def run_srunet_experiment(cfg: Gifnoc):
-    #     experiment = mlflow.set_experiment('SRUNet_training')
-    #     with mlflow.start_run(
-    #         experiment_id=experiment.experiment_id,
-    #         description="Running SR-UNet training",
-    #     ):
-    #         mlflow.log_params(cfg.params.stringify())
-    #         main(cfg)
-
-    def run_unet_experiment(cfg: Gifnoc):
-        """Launches an mlflow experiment with the standard UNet."""
-        mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
-        experiment = mlflow.set_experiment('UNet_training')
-        with mlflow.start_run(
-            experiment_id=experiment.experiment_id,
-            description="Running UNet training",
-        ):
-            mlflow.log_params(cfg.params.stringify())
-            main(cfg)
-
-
     default_cfg = get_default_config()
     # default_cfg.params.limit_train_batches = 2
     # default_cfg.params.limit_val_batches = 2
     # default_cfg.params.num_epochs = 2
 
-    # default_cfg.params.unet.ckpt_path_to_resume = Path(
-    #     default_cfg.paths.artifacts_dir,
-    #     '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth'
-    # )
-
-    run_unet_experiment(default_cfg)
-    # run_srunet_experiment(default_cfg)
+    run_experiment_with_unet(default_cfg)

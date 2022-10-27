@@ -1,6 +1,7 @@
 TODO List
 ==========
 
+> remember to change .jpg -> .png for `original_frames`
 > resume from branch `train_srunet`
 > resume from train.py
 

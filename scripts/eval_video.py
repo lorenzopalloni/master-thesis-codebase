@@ -1,23 +1,20 @@
 """Script to evaluate a trained super-resolution model"""
 
+### binarization/vaccaro/render.py - START
+import time
 from pathlib import Path
+from threading import Thread
 
 import cv2
+import data_loader as dl
+import matplotlib.pyplot as plt
 import torch
 import torchvision
 import torchvision.transforms.functional as F
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from binarization import dataset, train
 from binarization.config import Gifnoc, get_default_config
-
-### binarization/vaccaro/render.py - START
-import time
-from threading import Thread
-
-import data_loader as dl
-import torch
 
 torch.backends.cudnn.benchmark = True
 from queue import Queue
@@ -275,7 +272,7 @@ def process_raw_generated(
 
 def main(cfg: Gifnoc):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    gen = train.set_up_unet(cfg)
+    gen = train.set_up_generator(cfg)
     gen.to(device)
     video_fp = Path('hola.mp4')
     cap = cv2.VideoCapture(video_fp)
@@ -283,7 +280,7 @@ def main(cfg: Gifnoc):
 
 
 def main(cfg: Gifnoc):
-    save_dir = cfg.paths.outputs_dir / cfg.params.ckpt_path_to_resume.stem
+    save_dir = cfg.paths.outputs_dir / cfg.model.ckpt_path_to_resume.stem
     save_dir.mkdir(exist_ok=True, parents=True)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     whole_images_dataset = dataset.WholeImagesDataset(
@@ -296,7 +293,7 @@ def main(cfg: Gifnoc):
         shuffle=None,
     )
     progress_bar_val = tqdm(dl_val)
-    gen = train.set_up_unet(cfg)
+    gen = train.set_up_generator(cfg)
     gen.to(device)
     counter = 0
     for step_id_val, (compressed_val, original_val) in enumerate(
@@ -328,10 +325,11 @@ def main(cfg: Gifnoc):
             fig.savefig(save_path)
             plt.close(fig)  # close the current fig to prevent OOM issues
 
+
 if __name__ == "__main__":
     cfg = get_default_config()
     # default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_28_epoch_9.pth')
-    cfg.params.ckpt_path_to_resume = Path(
+    cfg.model.ckpt_path_to_resume = Path(
         '/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth'
     )
     cfg.params.batch_size = 10
