@@ -1,6 +1,8 @@
 # pylint: disable=missing-function-docstring
 """Script to evaluate a super-resolution model"""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -17,11 +19,12 @@ from binarization.datatools import (
 from binarization.traintools import set_up_cuda_device, set_up_generator
 
 
-def eval_images(cfg: Gifnoc, n_evaluations: int):
+def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
     save_dir = cfg.paths.outputs_dir / cfg.model.ckpt_path_to_resume.stem
     save_dir.mkdir(exist_ok=True, parents=True)
 
     device = set_up_cuda_device()
+
     gen = set_up_generator(cfg)
     gen.to(device)
 
@@ -30,7 +33,7 @@ def eval_images(cfg: Gifnoc, n_evaluations: int):
 
     counter = 0
     for step_id, (original, compressed) in enumerate(progress_bar):
-        if step_id > n_evaluations - 1:
+        if n_evaluations and step_id > n_evaluations - 1:
             break
 
         original = original.to(device)
@@ -64,7 +67,9 @@ if __name__ == "__main__":
     default_cfg = get_default_config()
     default_cfg.model.ckpt_path_to_resume = Path(
         default_cfg.paths.artifacts_dir,
-        "/checkpoints/2022_10_21_07_54_20/unet_0_59999.pth",
+        "best_checkpoints",
+        "2022_11_03_unet_5_999999.pth",
     )
     default_cfg.params.buffer_size = 1
+    default_cfg.model.name = 'unet'
     eval_images(default_cfg, n_evaluations=128)

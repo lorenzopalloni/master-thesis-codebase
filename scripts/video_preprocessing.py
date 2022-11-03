@@ -175,9 +175,7 @@ def main():
     ) = prepare_directories(input_dir)
 
     for original_fn in original_dir.iterdir():
-        compressed_fn = compressed_videos_dir / (
-            'compressed_' + original_fn.stem + '.mp4'
-        )
+        compressed_fn = Path(compressed_videos_dir, original_fn.stem + '.mp4')
 
         compress(
             input_fn=original_fn,
