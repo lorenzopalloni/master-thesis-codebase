@@ -1,6 +1,7 @@
 TODO List
 ==========
 
+> maybe set `scale_factor` from 2 to 4
 > remember to change .jpg -> .png for `original_frames`
 > resume from branch `train_srunet`
 > resume from train.py

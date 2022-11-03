@@ -239,7 +239,7 @@ def get_paired_paths(cfg: Gifnoc, stage: Stage) -> list[tuple[Path, Path]]:
     original_paths = list(
         itertools.chain.from_iterable(
             list_files(
-                Path(cfg.paths.original_frames_dir, path), extension='.jpg'
+                Path(cfg.paths.original_frames_dir, path), extension='.png'
             )
             for path in splits[stage.value]
         )

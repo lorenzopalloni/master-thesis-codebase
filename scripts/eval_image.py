@@ -67,8 +67,8 @@ if __name__ == "__main__":
     default_cfg = get_default_config()
     default_cfg.model.ckpt_path_to_resume = Path(
         default_cfg.paths.artifacts_dir,
-        "best_checkpoints",
-        "2022_11_03_unet_5_999999.pth",
+        "checkpoints",
+        "2022_10_21_07_54_20/unet_5_1019999.pth"
     )
     default_cfg.params.buffer_size = 1
     default_cfg.model.name = 'unet'
