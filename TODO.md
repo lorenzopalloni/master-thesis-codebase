@@ -1,15 +1,24 @@
 TODO List
 ==========
 
-> maybe set `scale_factor` from 2 to 4
-> remember to change .jpg -> .png for `original_frames`
 > resume from branch `train_srunet`
-> resume from train.py
 
 ## high priority
 
-- dry-run experiments (without creating any artifacts)
-- refactor for training with both SR-UNet and standard UNet
+
+- remote: copy-paste some videos and run `video_preprocessing.py` on them
+- local: train UNet with x4 scaling
+- local: implement eval_video.py
+- remote: scale up copy-paste more videos and run `video_preprocessing.py`
+- local: launch training SR-UNet
+- remote: launch training UNet
+- remote: launch training SR-UNet
+- local: evaluate with `eval_image.py` and trained weights both models
+- local: evaluate with `eval_video.py` and trained weights both models
+- try to binarize the UNet
+- train it
+- evaluate it
+
 - train SR-UNet with BVI-DVC
 - train UNet with BVI-DVC
 

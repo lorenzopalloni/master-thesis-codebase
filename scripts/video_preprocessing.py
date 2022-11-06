@@ -9,16 +9,21 @@ def compress(
     input_fn: Union[Path, str],
     output_fn: Union[Path, str],
     crf: int = 23,
-    scale_factor: int = 2,
+    scale_factor: int = 4,
 ):
     """Compresses a video.
+
+    Note: do not worry about the following warning (source: google it):
+    "deprecated pixel format used, make sure you did set range correctly"
 
     Args:
         input_fn (Union[Path, str]): Filename of the input video.
         output_fn (Union[Path, str]): Filename of the compressed video.
         crf (int, optional): Constant Rate Factor. Defaults to 23.
-        scale_factor (int): Scale factor. Defaults to 2.
+        scale_factor (int): Scale factor. Defaults to 4.
     """
+    scaled_w = f"'iw/{scale_factor}-mod(iw/{scale_factor},2)'"
+    scaled_h = f"'ih/{scale_factor}-mod(ih/{scale_factor},2)'"
     cmd = [
         'ffmpeg',
         '-i',
@@ -36,12 +41,16 @@ def compress(
         '-movflags',  # weird option
         'faststart',
         '-vf',  # video filters
+        # (
+        #     f'scale=iw/{scale_factor}:ih/{scale_factor}'  # downscale
+        #     ',format=yuv420p'  # output format, defaults to yuv420p
+        # ),
         (
-            f'scale=iw/{scale_factor}:ih/{scale_factor}'  # downscale
+            f'scale=w={scaled_w}:h={scaled_h}'  # downscale
             ',format=yuv420p'  # output format, defaults to yuv420p
         ),
         # (
-        #     f'scale=-{scale_factor}:iw'  # downscale
+        #     f'scale=-{scale_factor}:'  # downscale
         #     ',format=yuv420p'  # output format, defaults to yuv420p
         # ),
         f'{output_fn}',
@@ -163,7 +172,7 @@ def prepare_directories(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input_dir', type=str, default='.')
-    parser.add_argument('-s', '--scale_factor', type=int, default=2)
+    parser.add_argument('-s', '--scale_factor', type=int, default=4)
     args = parser.parse_args()
     input_dir = Path(args.input_dir)
 

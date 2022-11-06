@@ -175,30 +175,29 @@ def lists_have_same_elements(a_list: list, another_list: list) -> bool:
 
 
 def list_files(
-    path: Path, extension: str, sort_ascending: bool = True
+    path: Path, extensions: str | list[str] = '', sort_ascending: bool = True
 ) -> list[Path]:
-    """lists files in a given directory with the same extension.
+    """Lists files in a given directory with the same extension.
 
     By default, the result is provided in lexicographic order.
     """
     res = []
-    for x in path.iterdir():
-        if not x.is_dir():
-            if x.suffix.lstrip('.') == extension.lstrip('.'):
-                res.append(x)
-            else:
-                warnings.warn(
-                    f'{x} has not been included since it has '
-                    f'a different extension than {extension}.',
-                    UserWarning,
-                )
+    for child_path in path.iterdir():
+        if child_path.is_dir(): continue
+        if extensions and child_path.suffix.lower() not in extensions:
+            warnings.warn(
+                f'{child_path} has no valid extension ({extensions}).',
+                UserWarning,
+            )
+            continue
+        res.append(child_path)
     if sort_ascending:
         return sorted(res)
     return res
 
 
 def list_directories(path: Path, sort_ascending: bool = True) -> list[Path]:
-    """lists all the directories in a given path.
+    """Lists all the directories in a given path.
 
     By default, the result is provided in lexicographic order.
     """
@@ -209,7 +208,7 @@ def list_directories(path: Path, sort_ascending: bool = True) -> list[Path]:
 
 
 def list_subdir_files(
-    path: Path, extension: str, sort_ascending: bool = True
+    path: Path, extensions: str | list[str] = '', sort_ascending: bool = True
 ) -> list[Path]:
     """lists all files in the second level directories of the given path.
 
@@ -217,7 +216,7 @@ def list_subdir_files(
     """
     res = itertools.chain.from_iterable(
         (
-            list_files(i_dir, extension, sort_ascending=False)
+            list_files(i_dir, extensions, sort_ascending=False)
             for i_dir in list_directories(path)
         )
     )

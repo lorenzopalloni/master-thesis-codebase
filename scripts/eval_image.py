@@ -16,16 +16,16 @@ from binarization.datatools import (
     draw_validation_fig,
     process_raw_generated,
 )
-from binarization.traintools import set_up_cuda_device, set_up_generator
+from binarization.traintools import set_up_generator
 
 
 def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
     save_dir = cfg.paths.outputs_dir / cfg.model.ckpt_path_to_resume.stem
     save_dir.mkdir(exist_ok=True, parents=True)
 
-    device = set_up_cuda_device()
+    device = 'cpu'  # set_up_cuda_device()
 
-    gen = set_up_generator(cfg)
+    gen = set_up_generator(cfg, device=device)
     gen.to(device)
 
     test_batches = get_test_batches(cfg)
@@ -68,8 +68,8 @@ if __name__ == "__main__":
     default_cfg.model.ckpt_path_to_resume = Path(
         default_cfg.paths.artifacts_dir,
         "checkpoints",
-        "2022_10_21_07_54_20/unet_5_1019999.pth"
+        "2022_10_21_07_54_20/unet_5_1099999.pth"
     )
     default_cfg.params.buffer_size = 1
     default_cfg.model.name = 'unet'
-    eval_images(default_cfg, n_evaluations=128)
+    eval_images(default_cfg, n_evaluations=512)

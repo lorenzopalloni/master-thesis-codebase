@@ -13,7 +13,7 @@ class ModelConfig:
     num_filters: int = 64
     use_residual: bool = True
     use_batch_norm: bool = False
-    scale_factor: int = 2
+    scale_factor: int = 4
     ckpt_path_to_resume: Path | None = None
 
 
@@ -29,7 +29,7 @@ class ParamsConfig:
     limit_val_batches: int | None = None
     save_ckpt_every: int = 20_000
     num_workers: int = 1
-    num_epochs: int = 6
+    num_epochs: int = 3
     w0: float = 1e-0  # LPIPS weight
     w1: float = 1e-0  # SSIM weight
     w2: float = 1e-3  # Adversarial loss weight

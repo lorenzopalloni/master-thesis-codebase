@@ -46,7 +46,7 @@ def set_up_checkpoints_dir(artifacts_dir: Path) -> Path:
     return checkpoints_dir
 
 
-def set_up_generator(cfg: Gifnoc) -> models.UNet | models.SRUNet:
+def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> models.UNet | models.SRUNet:
     """Instantiates a UNet or a SR-UNet, resuming model weights if provided"""
     if cfg.model.name == 'unet':
         generator = models.UNet(
@@ -56,7 +56,7 @@ def set_up_generator(cfg: Gifnoc) -> models.UNet | models.SRUNet:
             scale_factor=cfg.model.scale_factor,
         )
     elif cfg.model.name == 'srunet':
-        raise NotImplementedError("WIP SR-UNet implementation.")
+        raise NotImplementedError("[WIP] SR-UNet not implementated.")
         # generator = models.SRUNet(
         #     num_filters=cfg.model.num_filters,
         #     use_residual=cfg.model.use_residual,
@@ -66,10 +66,11 @@ def set_up_generator(cfg: Gifnoc) -> models.UNet | models.SRUNet:
     else:
         raise ValueError(f"`{cfg.model.name=}`, choose in {'unet', 'srunet'}.")
 
+    generator.to(device)
     if cfg.model.ckpt_path_to_resume:
-        print(f'>>> resume from {cfg.model.ckpt_path_to_resume}')
+        print(f'>>> Resuming from {cfg.model.ckpt_path_to_resume}')
         generator.load_state_dict(
-            torch.load(cfg.model.ckpt_path_to_resume.as_posix())
+            torch.load(cfg.model.ckpt_path_to_resume.as_posix(), map_location=device)
         )
     return generator
 

@@ -26,8 +26,11 @@ def run_training(cfg: Gifnoc):
 
     checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
 
-    gen = set_up_generator(cfg=cfg)
+    device = set_up_cuda_device(device_id=1, verbose=True)
+
+    gen = set_up_generator(cfg=cfg, device=device)
     dis = models.Discriminator()
+    dis.to(device)
 
     gen_optim = torch.optim.Adam(lr=cfg.params.gen_lr, params=gen.parameters())
     dis_optim = torch.optim.Adam(lr=cfg.params.dis_lr, params=dis.parameters())
@@ -37,9 +40,6 @@ def run_training(cfg: Gifnoc):
     lpips_alex_metric_op = lpips.LPIPS(net='alex', version='0.1')
     bce_loss_op = torch.nn.BCELoss()
 
-    device = set_up_cuda_device(verbose=True)
-    gen.to(device)
-    dis.to(device)
     lpips_vgg_loss_op.to(device)
     lpips_alex_metric_op.to(device)
 

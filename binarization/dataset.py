@@ -230,30 +230,21 @@ def get_paired_paths(cfg: Gifnoc, stage: Stage) -> list[tuple[Path, Path]]:
     Returns:
         list[tuple[Path, Path]]: Pairs of original/compressed frame paths,
             such as [
-                (original_path_1, compressed_path_1),
-                (original_path_2, compressed_path_2),
+                (out_path_1, in_path_1),
+                (out_path_2, in_path_2),
                 ...
             ].
     """
     splits = get_splits(cfg)
-    original_paths = list(
-        itertools.chain.from_iterable(
-            list_files(
-                Path(cfg.paths.original_frames_dir, path), extension='.png'
-            )
-            for path in splits[stage.value]
-        )
-    )
-    compressed_paths = list(
-        itertools.chain.from_iterable(
-            list_files(
-                Path(cfg.paths.compressed_frames_dir, path), extension='.jpg'
-            )
-            for path in splits[stage.value]
-        )
-    )
-    assert len(original_paths) == len(compressed_paths)
-    return list(zip(original_paths, compressed_paths))
+    out_paths = []
+    in_paths = []
+    for dirname in splits[stage.value]:
+        dirpath = Path(cfg.paths.original_frames_dir, dirname)
+        out_paths.extend(list_files(dirpath, extensions=['.png', '.jpg']))
+        in_paths.extend(list_files(dirpath, extensions=['.png', '.jpg']))
+
+    assert len(out_paths) == len(in_paths)
+    return list(zip(out_paths, in_paths))
 
 
 def default_train_pipe(
