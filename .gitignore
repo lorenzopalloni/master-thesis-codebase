@@ -3,6 +3,7 @@ data/*
 artifacts/
 checkpoints/
 outputs/
+old_data/
 
 # any jupyter notebook
 **/*/*.ipynb

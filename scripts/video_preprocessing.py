@@ -1,6 +1,7 @@
 import argparse
 import shutil
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Tuple, Union
 
@@ -92,7 +93,7 @@ def all_files_have_the_same_extension(folder: Union[Path, str]) -> bool:
     return len(files) == 0 or len(set(x.suffix for x in files)) == 1
 
 
-def assure_same_extension_among_files(
+def assert_same_extension_among_files(
     folder: Union[Path, str]
 ) -> Union[bool, Exception]:
     """Returns True if all the files in `folder` have the same extension,
@@ -102,7 +103,7 @@ def assure_same_extension_among_files(
     if all_files_have_the_same_extension(folder):
         return True
     raise Exception(
-        f'All files in "{folder.resolve().as_posix()}" must have the'
+        f'All files in "{folder.absolute().as_posix()}" must have the'
         ' same extension.'
     )
 
@@ -111,19 +112,19 @@ def prepare_original_videos_dir(
     input_dir: Union[Path, str],
     original_videos_namedir: str = 'original_videos',
 ) -> Path:
-    """Assures a standard directory structure for original videos."""
+    """Asserts a standard directory structure for original videos."""
     original_videos_namedir = 'original_videos'
     input_dir = Path(input_dir)
 
-    case1 = input_dir.resolve().name != original_videos_namedir
+    case1 = input_dir.absolute().name != original_videos_namedir
     case11 = case1 and (input_dir / original_videos_namedir).is_dir()
-    case2 = input_dir.resolve().name == original_videos_namedir
+    case2 = input_dir.absolute().name == original_videos_namedir
 
     if case11:
         original_videos_dir = input_dir / original_videos_namedir
-        assure_same_extension_among_files(original_videos_dir)
+        # assert_same_extension_among_files(original_videos_dir)
     elif case1:
-        assure_same_extension_among_files(input_dir)
+        # assert_same_extension_among_files(input_dir)
         (original_videos_dir := input_dir / original_videos_namedir).mkdir()
         # mv <input_dir>/* -t <input_dir>/<original_videos_namedir>/
         for video_fp in input_dir.iterdir():
@@ -132,11 +133,11 @@ def prepare_original_videos_dir(
                     video_fp.as_posix(), original_videos_dir.as_posix()
                 )
     elif case2:
-        assure_same_extension_among_files(input_dir)
+        # assert_same_extension_among_files(input_dir)
         original_videos_dir = input_dir
         if not len(list(original_videos_dir.parent.iterdir())) == 1:
             raise Exception(
-                f'"{original_videos_dir.parent.resolve().as_posix()}" is expected to'
+                f'"{original_videos_dir.parent.absolute().as_posix()}" is expected to'
                 f' contain only `./{original_videos_namedir}`, without any '
                 'other files.'
             )
@@ -147,7 +148,7 @@ def prepare_directories(
     input_dir: Union[Path, str],
     original_videos_namedir: str = 'original_videos',
 ) -> Tuple[Path, Path, Path, Path]:
-    """Assures a standard dir structure for original/compressed videos/frames."""
+    """Asserts a standard dir structure for original/compressed videos/frames."""
     original_dir = prepare_original_videos_dir(
         input_dir=input_dir, original_videos_namedir=original_videos_namedir
     )
@@ -184,6 +185,12 @@ def main():
     ) = prepare_directories(input_dir)
 
     for original_fn in original_dir.iterdir():
+        if original_fn.suffix != '.mp4':
+            warnings.warn(
+                f"{original_fn} has no valid extension ({'.mp4'}).",
+                UserWarning,
+            )
+            continue
         compressed_fn = Path(compressed_videos_dir, original_fn.stem + '.mp4')
 
         compress(
