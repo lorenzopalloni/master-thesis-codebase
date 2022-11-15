@@ -1,33 +1,13 @@
-"""Script to evaluate a trained super-resolution model"""
-
-### binarization/vaccaro/render.py - START
 import time
 from pathlib import Path
 from threading import Thread
 
 import cv2
-import data_loader as dl
-import matplotlib.pyplot as plt
 import torch
 import torchvision
-import torchvision.transforms.functional as F
-from tqdm import tqdm
-
-from binarization import dataset, train
-from binarization.config import Gifnoc, get_default_config
 
 torch.backends.cudnn.benchmark = True
 from queue import Queue
-
-import cv2
-import numpy as np
-import utils
-from models import *
-from pytorch_unet import SimpleResNet, SRUnet, UNet
-from tqdm import tqdm
-
-# from apex import amp
-
 
 def save_with_cv(pic, imname):
     pic = dl.de_normalize(pic.squeeze(0))
@@ -116,58 +96,21 @@ def blend_images(i1, i2):
     return out
 
 
-if __name__ == '__main__':
-    args = utils.ARArgs()
-    enable_write_to_video = False
-    arch_name = args.ARCHITECTURE
-    dataset_upscale_factor = args.UPSCALE_FACTOR
-
-    if arch_name == 'srunet':
-        model = SRUnet(
-            3,
-            residual=True,
-            scale_factor=dataset_upscale_factor,
-            n_filters=args.N_FILTERS,
-            downsample=args.DOWNSAMPLE,
-            layer_multiplier=args.LAYER_MULTIPLIER,
-        )
-    elif arch_name == 'unet':
-        model = UNet(
-            3,
-            residual=True,
-            scale_factor=dataset_upscale_factor,
-            n_filters=args.N_FILTERS,
-        )
-    elif arch_name == 'srgan':
-        model = SRResNet()
-    elif arch_name == 'espcn':
-        model = SimpleResNet(n_filters=64, n_blocks=6)
-    else:
-        raise Exception(
-            "Unknown architecture. Select one between:", args.archs
-        )
-
-    model_path = args.MODEL_NAME
-    model.load_state_dict(torch.load(model_path))
-
-    model = model.cuda()
-    model.reparametrize()
-
-    path = args.CLIPNAME
-    cap = cv2.VideoCapture(path)
-    reader = torchvision.io.VideoReader(path, "video")
-
-    if enable_write_to_video:
-        fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-        hr_video_writer = cv2.VideoWriter(
-            'rendered.mp4', fourcc, 30, (1920, 1080)
-        )
-
+def main(cfg: Gifnoc):
+    SCALE_FACTOR = 4
+    SHOW_ONLY_HQ = True
+    
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    gen = train.set_up_generator(cfg)
+    gen.to(device)
+    video_fp = Path('hola.mp4')
+    cap = cv2.VideoCapture(video_fp)
+    reader = torchvision.io.VideoReader(video_fp, 'video')
     metadata = reader.get_metadata()
 
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     height_fix, width_fix, padH, padW = get_padded_dim(height, width)
 
     frame_queue = Queue(1)
@@ -187,7 +130,7 @@ if __name__ == '__main__':
             x_bicubic = torch.clip(
                 F.interpolate(
                     x,
-                    scale_factor=args.UPSCALE_FACTOR * args.DOWNSAMPLE,
+                    scale_factor=SCALE_FACTOR,
                     mode='bicubic',
                 ),
                 min=-1,
@@ -222,7 +165,7 @@ if __name__ == '__main__':
 
             out_true = i // (target_fps * 3) % 2 == 0
 
-            if not args.SHOW_ONLY_HQ:
+            if not SHOW_ONLY_HQ:
                 out = blend_images(x_bicubic, out)
             out_queue.put(out)
             frametime = time.time() - t0
@@ -240,97 +183,3 @@ if __name__ == '__main__':
                     frametime * 1e3, 1000 / frametime, out_true
                 )
             )
-### binarization/vaccaro/render.py - END
-
-
-def inv_adjust_image_for_unet(
-    generated: torch.Tensor, original: torch.Tensor
-) -> torch.Tensor:
-    height_generated, width_generated = (
-        generated.shape[-2],
-        generated.shape[-1],
-    )
-    height_original, width_original = original.shape[-2], original.shape[-1]
-    height_offset = (height_generated - height_original) // 2
-    width_offset = (width_generated - width_original) // 2
-    return F.crop(
-        generated, height_offset, width_offset, height_original, width_original
-    )
-
-
-def process_raw_generated(
-    generated: torch.Tensor, original: torch.Tensor
-) -> torch.Tensor:
-    """Postprocesses outputs from super-resolution generator models"""
-    out = generated
-    out = dataset.inv_min_max_scaler(out)
-    out = out.clip(0, 255)
-    out = out / 255.0
-    out = inv_adjust_image_for_unet(out, original)
-    return out
-
-
-def main(cfg: Gifnoc):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    gen = train.set_up_generator(cfg)
-    gen.to(device)
-    video_fp = Path('hola.mp4')
-    cap = cv2.VideoCapture(video_fp)
-    reader = torchvision.io.VideoReader(video_fp, 'video')
-
-
-def main(cfg: Gifnoc):
-    save_dir = cfg.paths.outputs_dir / cfg.model.ckpt_path_to_resume.stem
-    save_dir.mkdir(exist_ok=True, parents=True)
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    whole_images_dataset = dataset.WholeImagesDataset(
-        original_frames_dir=cfg.paths.val_original_frames_dir,
-        compressed_frames_dir=cfg.paths.val_compressed_frames_dir,
-    )
-    dl_val = dataset.DataLoader(
-        dataset=whole_images_dataset,
-        batch_size=cfg.params.batch_size,
-        shuffle=None,
-    )
-    progress_bar_val = tqdm(dl_val)
-    gen = train.set_up_generator(cfg)
-    gen.to(device)
-    counter = 0
-    for step_id_val, (compressed_val, original_val) in enumerate(
-        progress_bar_val
-    ):
-
-        compressed_val = compressed_val.to(device)
-        original_val = original_val.to(device)
-
-        compressed_val = dataset.adjust_image_for_unet(compressed_val)
-
-        gen.eval()
-        with torch.no_grad():
-            generated_val = gen(compressed_val)
-
-        original_val = original_val.cpu()
-        generated_val = generated_val.cpu()
-        compressed_val = compressed_val.cpu()
-        generated_val = process_raw_generated(generated_val, original_val)
-
-        for i in range(original_val.shape[0]):
-            fig = dataset.draw_validation_fig(
-                original_image=original_val[i],
-                compressed_image=compressed_val[i],
-                generated_image=generated_val[i],
-            )
-            save_path = save_dir / f'validation_fig_{counter}.jpg'
-            counter += 1
-            fig.savefig(save_path)
-            plt.close(fig)  # close the current fig to prevent OOM issues
-
-
-if __name__ == "__main__":
-    cfg = get_default_config()
-    # default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_28_epoch_9.pth')
-    cfg.model.ckpt_path_to_resume = Path(
-        '/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth'
-    )
-    cfg.params.batch_size = 10
-    main(cfg)
