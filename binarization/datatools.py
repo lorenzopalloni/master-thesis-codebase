@@ -48,7 +48,7 @@ def random_crop_images(
     original_image: PIL.Image.Image,
     compressed_image: PIL.Image.Image,
     patch_size: int = 96,
-    scale_factor: int = 2,
+    scale_factor: int = 4,
 ) -> tuple[PIL.Image.Image, PIL.Image.Image]:
     """Randomly crops two images.
 
@@ -223,3 +223,22 @@ def list_subdir_files(
     if sort_ascending:
         return sorted(res)
     return list(res)
+
+
+def estimate_n_batches_per_buffer(
+    factor: float = 3.0,
+    buffer_size: int = 16,
+    compressed_image_width: int = 944,
+    compressed_image_height: int = 544,
+    batch_size: int = 14,
+    patch_size: int = 96,
+) -> int:
+    """Roughly estimates a good number of batches per buffer."""
+    w, h = compressed_image_width, compressed_image_height
+    average_patches_per_image = round((w * h) / (patch_size ** 2))  # 56
+    average_available_patches = buffer_size * average_patches_per_image
+    n_batches_per_buffer = round((average_available_patches / factor) / batch_size)
+    return n_batches_per_buffer
+
+if __name__ == '__main__':
+    print(estimate_n_batches_per_buffer())

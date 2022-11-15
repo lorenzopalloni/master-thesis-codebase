@@ -1,28 +1,11 @@
 # TODO List
 
-```
-  File "binarization/train.py", line 197, in <module>
-    run_experiment_with_unet(default_cfg)
-  File "binarization/train.py", line 171, in run_experiment_with_unet
-    run_training(cfg)
-  File "binarization/train.py", line 84, in run_training
-    loss_lpips = lpips_vgg_loss_op(generated, original).mean()
-  File "/homes/students_home/lorenzopalloni/.venv/binarization/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1130, in _call_impl
-    return forward_call(*input, **kwargs)
-  File "/homes/students_home/lorenzopalloni/.venv/binarization/lib/python3.8/site-packages/lpips/lpips.py", line 124, in forward
-    diffs[kk] = (feats0[kk]-feats1[kk])**2
-RuntimeError: The size of tensor a (384) must match the size of tensor b (192) at non-singleton dimension 3
-```
-
-> debug training UNet with `scale_factor == 4`
 > resume with: `ssh solaris && screen -r binarization`
 > current branch: `train_srunet`
 
 ## high priority
 
-- DONE - symbolic link `ln -s ./data/original_videos` -> `/homes/datasets/BVI_DVC/3h<...>/Videos/`
-- DONE - run `./scripts/video_preprocessing.py -i data -s 4`
-- train UNet with `scale_factor == 4`
+- BUSY - train UNet with `scale_factor == 4`
 - implement `eval_video.py` (video + timing) while UNet is training
 - train SR-UNet
 
@@ -113,3 +96,7 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - fix: image too big to be loaded and cropped one-by-one
 - DONE - add in config `buffer_size` and `n_batches_per_buffer`
 - DONE - refactor `batch_generator`, from function to class
+- DONE - debug data loader, there's something weird
+- DONE - symbolic link `ln -s ./data/original_videos` -> `/homes/datasets/BVI_DVC/3h<...>/Videos/`
+- DONE - run `./scripts/video_preprocessing.py -i data -s 4`
+

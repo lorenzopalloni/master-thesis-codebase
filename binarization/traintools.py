@@ -53,7 +53,7 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> models.UNet | m
             num_filters=cfg.model.num_filters,
             use_residual=cfg.model.use_residual,
             use_batch_norm=cfg.model.use_batch_norm,
-            scale_factor=cfg.model.scale_factor,
+            scale_factor=cfg.params.scale_factor,
         )
     elif cfg.model.name == 'srunet':
         raise NotImplementedError("[WIP] SR-UNet not implementated.")
@@ -61,7 +61,7 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> models.UNet | m
         #     num_filters=cfg.model.num_filters,
         #     use_residual=cfg.model.use_residual,
         #     use_batch_norm=cfg.model.use_batch_norm,
-        #     scale_factor=cfg.model.scale_factor
+        #     scale_factor=cfg.params.scale_factor
         # )
     else:
         raise ValueError(f"`{cfg.model.name=}`, choose in {'unet', 'srunet'}.")
@@ -81,7 +81,7 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> models.UNet | m
 #         num_filters=cfg.model.num_filters,
 #         use_residual=cfg.model.use_residual,
 #         use_batch_norm=cfg.model.use_batch_norm,
-#         scale_factor=cfg.model.scale_factor
+#         scale_factor=cfg.params.scale_factor
 #     )
 #     if cfg.params.srunet.ckpt_path_to_resume:
 #         print(f'>>> resume from {cfg.params.srunet.ckpt_path_to_resume}')

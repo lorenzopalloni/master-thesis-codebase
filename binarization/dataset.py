@@ -238,21 +238,25 @@ def get_paired_paths(cfg: Gifnoc, stage: Stage) -> list[tuple[Path, Path]]:
     splits = get_splits(cfg)
     out_paths = []
     in_paths = []
-    for dirname in splits[stage.value]:
-        dirpath = Path(cfg.paths.original_frames_dir, dirname)
-        out_paths.extend(list_files(dirpath, extensions=['.png', '.jpg']))
-        in_paths.extend(list_files(dirpath, extensions=['.png', '.jpg']))
+    for video_name in splits[stage.value]:
+        out_frames_dir = Path(cfg.paths.original_frames_dir, video_name)
+        out_paths.extend(list_files(out_frames_dir, extensions=['.png', '.jpg']))
+        in_frames_dir = Path(cfg.paths.compressed_frames_dir, video_name)
+        in_paths.extend(list_files(in_frames_dir, extensions=['.png', '.jpg']))
 
     assert len(out_paths) == len(in_paths)
     return list(zip(out_paths, in_paths))
 
 
 def default_train_pipe(
-    original_image: PIL.Image.Image, compressed_image: PIL.Image.Image
+    original_image: PIL.Image.Image,
+    compressed_image: PIL.Image.Image,
+    scale_factor: int = 4,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     original_patch, compressed_patch = random_crop_images(
         original_image=original_image,
         compressed_image=compressed_image,
+        scale_factor=scale_factor,
     )
     if np.random.random() < 0.5:
         original_patch = F.hflip(original_patch)
@@ -264,12 +268,16 @@ def default_train_pipe(
 
 
 def default_val_pipe(
-    original_image: PIL.Image.Image, compressed_image: PIL.Image.Image
+    original_image: PIL.Image.Image,
+    compressed_image: PIL.Image.Image,
+    scale_factor: int = 4,
+    random_seed: int = 42
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    np.random.seed(42)  # crop at random positions but always the same
+    np.random.seed(random_seed)  # crop at random positions but always the same
     original_patch, compressed_patch = random_crop_images(
         original_image=original_image,
         compressed_image=compressed_image,
+        scale_factor=scale_factor,
     )
     np.random.seed(None)
     return (
@@ -279,8 +287,11 @@ def default_val_pipe(
 
 
 def default_test_pipe(
-    original_image: PIL.Image.Image, compressed_image: PIL.Image.Image
+    original_image: PIL.Image.Image,
+    compressed_image: PIL.Image.Image,
+    scale_factor: int = 4,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    del scale_factor
     return (
         min_max_scaler(F.pil_to_tensor(original_image)),
         min_max_scaler(F.pil_to_tensor(compressed_image)),
@@ -350,6 +361,8 @@ class BatchGenerator:
             self.n_batches_per_buffer = buffer_size
             self.batch_size = 1
 
+        self.scale_factor = cfg.params.scale_factor
+
     def __len__(self):
         return len(self.buffer_generator) * self.n_batches_per_buffer
 
@@ -380,7 +393,7 @@ class BatchGenerator:
             original_image, compressed_image = self.buffer[random_idx]
             original_patch, compressed_patch = self.frame_to_patch_pipes[
                 self.stage
-            ](original_image, compressed_image)
+            ](original_image, compressed_image, scale_factor=self.scale_factor)
             original_batch.append(original_patch)
             compressed_batch.append(compressed_patch)
 
