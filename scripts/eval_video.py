@@ -1,13 +1,19 @@
 import time
 from pathlib import Path
-from threading import Thread
+from threading import Thread  # not sure about this
 
 import cv2
 import torch
 import torchvision
+from tqdm import tqdm
 
-torch.backends.cudnn.benchmark = True
-from queue import Queue
+torch.backends.cudnn.benchmark = True  # not sure about this
+from queue import Queue  # not sure about this
+
+from gifnoc import Gifnoc
+from binarization.traintools import set_up_generator
+from binarization.config import get_default_config
+
 
 def save_with_cv(pic, imname):
     pic = dl.de_normalize(pic.squeeze(0))
@@ -96,16 +102,23 @@ def blend_images(i1, i2):
     return out
 
 
-def main(cfg: Gifnoc):
-    SCALE_FACTOR = 4
-    SHOW_ONLY_HQ = True
-    
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    gen = train.set_up_generator(cfg)
-    gen.to(device)
-    video_fp = Path('hola.mp4')
-    cap = cv2.VideoCapture(video_fp)
-    reader = torchvision.io.VideoReader(video_fp, 'video')
+def eval_video(
+    cfg: Gifnoc,
+    video_path: Path,
+    enable_show_only_hq: bool = True,
+    enable_write_to_video: bool = False
+): 
+    device = 'cpu'  # set_up_cuda_device()
+    model = set_up_generator(cfg, device=device)
+    cap = cv2.VideoCapture(video_path.as_posix())
+    reader = torchvision.io.VideoReader(video_path.as_posix(), 'video')
+
+    if write_to_video:
+        fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+        hr_video_writer = cv2.VideoWriter(
+            'rendered.mp4', fourcc, 30, (1920, 1080)
+        )
+
     metadata = reader.get_metadata()
 
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -113,8 +126,8 @@ def main(cfg: Gifnoc):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     height_fix, width_fix, padH, padW = get_padded_dim(height, width)
 
-    frame_queue = Queue(1)
-    out_queue = Queue(1)
+    frame_queue: Queue = Queue(1)
+    out_queue: Queue = Queue(1)
 
     reader.seek(0)
 
@@ -122,15 +135,15 @@ def main(cfg: Gifnoc):
         count = 0
         start = time.time()
         while True:
-            cv2_im = next(cap)['data']  # .cuda().float()
-            cv2_im = cv2_im.cuda().float()
+            cv2_im = next(cap)['data']
+            cv2_im = cv2_im.cpu().float()
 
             x = dl.normalize_img(cv2_im / 255.0).unsqueeze(0)
 
             x_bicubic = torch.clip(
                 F.interpolate(
                     x,
-                    scale_factor=SCALE_FACTOR,
+                    scale_factor=cfg.params.scale_factor,
                     mode='bicubic',
                 ),
                 min=-1,
@@ -149,28 +162,31 @@ def main(cfg: Gifnoc):
             cv2.imshow('rendering', cv2_out)
             cv2.waitKey(1)
 
-    t1 = Thread(target=read_pic, args=(reader, frame_queue)).start()
-    t2 = Thread(target=show_pic, args=(cap, out_queue)).start()
+    Thread(target=read_pic, args=(reader, frame_queue)).start()
+    Thread(target=show_pic, args=(cap, out_queue)).start()
     target_fps = cap.get(cv2.CAP_PROP_FPS)
-    target_frametime = 1000 / target_fps
+    target_frame_time = 1000 / target_fps
 
     model = model.eval()
     with torch.no_grad():
         tqdm_ = tqdm(range(frame_count))
         for i in tqdm_:
-            t0 = time.time()
+
+            frame_time_start = time.perf_counter()
 
             x, x_bicubic = frame_queue.get()
             out = model(x)[:, :, : int(height) * 2, : int(width) * 2]
 
             out_true = i // (target_fps * 3) % 2 == 0
 
-            if not SHOW_ONLY_HQ:
+            if not enable_show_only_hq:
                 out = blend_images(x_bicubic, out)
             out_queue.put(out)
-            frametime = time.time() - t0
-            if frametime < target_frametime * 1e-3:
-                time.sleep(target_frametime * 1e-3 - frametime)
+
+            frame_time = time.perf_counter() - frame_time_start
+
+            if frame_time < target_frame_time * 1e-3:
+                time.sleep(target_frame_time * 1e-3 - frame_time)
 
             if enable_write_to_video:
                 write_to_video(out, hr_video_writer)
@@ -180,6 +196,33 @@ def main(cfg: Gifnoc):
 
             tqdm_.set_description(
                 "frame time: {}; fps: {}; {}".format(
-                    frametime * 1e3, 1000 / frametime, out_true
+                    frame_time * 1e3, 1000 / frame_time, out_true
                 )
             )
+
+if __name__ == '__main__':
+    default_cfg = get_default_config()
+    default_cfg.model.ckpt_path_to_resume = Path(
+        default_cfg.paths.artifacts_dir,
+        "checkpoints",
+        "2022_11_15_07_43_30/unet_0_39999.pth"
+    )
+    default_cfg.params.buffer_size = 1
+    default_cfg.model.name = 'unet'
+
+    # video_path = Path(
+    #     default_cfg.paths.data_dir,
+    #     'compressed_videos',
+    #     'DFireS18Mitch_480x272_24fps_10bit_420.mp4'
+    # )
+    video_path = Path(
+        default_cfg.paths.project_dir,
+        "tests/assets/compressed_videos/homer_arch_512x372_120K.mp4"
+    )
+
+    eval_video(
+        cfg=default_cfg,
+        video_path=video_path, 
+        enable_show_only_hq = True,
+        enable_write_to_video = False,
+    )

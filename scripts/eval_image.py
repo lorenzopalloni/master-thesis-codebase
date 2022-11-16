@@ -68,8 +68,8 @@ if __name__ == "__main__":
     default_cfg.model.ckpt_path_to_resume = Path(
         default_cfg.paths.artifacts_dir,
         "checkpoints",
-        "2022_10_21_07_54_20/unet_5_1099999.pth"
+        "2022_11_15_07_43_30/unet_0_39999.pth"
     )
     default_cfg.params.buffer_size = 1
     default_cfg.model.name = 'unet'
-    eval_images(default_cfg, n_evaluations=512)
+    eval_images(default_cfg, n_evaluations=128)
