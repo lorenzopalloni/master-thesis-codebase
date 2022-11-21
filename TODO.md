@@ -5,7 +5,6 @@
 
 ## high priority
 
-- BUSY - train UNet with `scale_factor == 4`
 - implement `eval_video.py` (video + timing) while UNet is training
 - train SR-UNet
 
@@ -99,4 +98,4 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - debug data loader, there's something weird
 - DONE - symbolic link `ln -s ./data/original_videos` -> `/homes/datasets/BVI_DVC/3h<...>/Videos/`
 - DONE - run `./scripts/video_preprocessing.py -i data -s 4`
-
+- DONE - train UNet with `scale_factor == 4`
