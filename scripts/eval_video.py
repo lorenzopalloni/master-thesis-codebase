@@ -19,7 +19,6 @@ torch.backends.cudnn.benchmark = True  # not sure about this
 
 
 def save_with_cv(pic, imname):
-    # pic = dl.de_normalize(pic.squeeze(0))
     pic = inv_min_max_scaler(pic.squeeze(0))
     npimg = np.transpose(pic.cpu().numpy(), (1, 2, 0)) * 255
     npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
@@ -28,7 +27,6 @@ def save_with_cv(pic, imname):
 
 
 def write_to_video(pic, writer):
-    # pic = dl.de_normalize(pic.squeeze(0))
     pic = inv_min_max_scaler(pic.squeeze(0))
     npimg = np.transpose(pic.cpu().numpy(), (1, 2, 0)) * 255
     npimg = npimg.astype('uint8')
@@ -79,7 +77,6 @@ def cv2toTorch(im):
     im = im / 255
     im = torch.Tensor(im).cuda()
     im = im.permute(2, 0, 1).unsqueeze(0)
-    # im = dl.normalize_img(im)
     im = min_max_scaler(im)
     return im
 
@@ -92,7 +89,6 @@ def torchToCv2(pic, rescale_factor=1.0):
             align_corners=True,
             mode='bicubic',
         )
-    # pic = dl.de_normalize(pic.squeeze(0))
     pic = inv_min_max_scaler(pic.squeeze(0))
     pic = pic.permute(1, 2, 0) * 255
     npimg = pic.byte().cpu().numpy()
@@ -115,6 +111,7 @@ def eval_video(
     enable_show_only_hq: bool = True,
     enable_write_to_video: bool = False
 ): 
+    scale_factor = cfg.params.scale_factor
     device = 'cpu'  # set_up_cuda_device()
     model = set_up_generator(cfg, device=device)
     cap = cv2.VideoCapture(video_path.as_posix())
@@ -140,7 +137,7 @@ def eval_video(
 
     def read_pic(cap, q):
         count = 0
-        # start = time.time()
+        # start = time.time()  # ??
         while True:
             cv2_im = next(cap)['data']
             cv2_im = cv2_im.cpu().float()
@@ -182,7 +179,7 @@ def eval_video(
             frame_time_start = time.perf_counter()
 
             x, x_bicubic = frame_queue.get()
-            out = model(x)[:, :, : int(height) * 2, : int(width) * 2]
+            out = model(x)[:, :, : int(height) * scale_factor, : int(width) * scale_factor]
 
             out_true = i // (target_fps * 3) % 2 == 0
 
@@ -214,6 +211,12 @@ if __name__ == '__main__':
     #     "checkpoints",
     #     "2022_11_15_07_43_30/unet_0_39999.pth"
     # )
+    default_cfg.model.ckpt_path_to_resume = Path(
+        default_cfg.paths.artifacts_dir,
+        "best_checkpoints",
+        "unet_2_191268.pth"
+    )
+
     default_cfg.params.buffer_size = 1
     default_cfg.model.name = 'unet'
 
