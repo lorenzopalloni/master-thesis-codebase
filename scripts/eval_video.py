@@ -1,22 +1,26 @@
 import time
 from pathlib import Path
+from queue import Queue  # not sure about this
 from threading import Thread  # not sure about this
 
 import cv2
+import numpy as np
 import torch
+import torch.nn.functional as F
 import torchvision
+from gifnoc import Gifnoc
 from tqdm import tqdm
 
-torch.backends.cudnn.benchmark = True  # not sure about this
-from queue import Queue  # not sure about this
-
-from gifnoc import Gifnoc
-from binarization.traintools import set_up_generator
 from binarization.config import get_default_config
+from binarization.datatools import inv_min_max_scaler, min_max_scaler
+from binarization.traintools import set_up_generator
+
+torch.backends.cudnn.benchmark = True  # not sure about this
 
 
 def save_with_cv(pic, imname):
-    pic = dl.de_normalize(pic.squeeze(0))
+    # pic = dl.de_normalize(pic.squeeze(0))
+    pic = inv_min_max_scaler(pic.squeeze(0))
     npimg = np.transpose(pic.cpu().numpy(), (1, 2, 0)) * 255
     npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
 
@@ -24,7 +28,8 @@ def save_with_cv(pic, imname):
 
 
 def write_to_video(pic, writer):
-    pic = dl.de_normalize(pic.squeeze(0))
+    # pic = dl.de_normalize(pic.squeeze(0))
+    pic = inv_min_max_scaler(pic.squeeze(0))
     npimg = np.transpose(pic.cpu().numpy(), (1, 2, 0)) * 255
     npimg = npimg.astype('uint8')
     npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
@@ -74,7 +79,8 @@ def cv2toTorch(im):
     im = im / 255
     im = torch.Tensor(im).cuda()
     im = im.permute(2, 0, 1).unsqueeze(0)
-    im = dl.normalize_img(im)
+    # im = dl.normalize_img(im)
+    im = min_max_scaler(im)
     return im
 
 
@@ -86,7 +92,8 @@ def torchToCv2(pic, rescale_factor=1.0):
             align_corners=True,
             mode='bicubic',
         )
-    pic = dl.de_normalize(pic.squeeze(0))
+    # pic = dl.de_normalize(pic.squeeze(0))
+    pic = inv_min_max_scaler(pic.squeeze(0))
     pic = pic.permute(1, 2, 0) * 255
     npimg = pic.byte().cpu().numpy()
     npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
@@ -138,7 +145,7 @@ def eval_video(
             cv2_im = next(cap)['data']
             cv2_im = cv2_im.cpu().float()
 
-            x = dl.normalize_img(cv2_im / 255.0).unsqueeze(0)
+            x = min_max_scaler(cv2_im / 255.0).unsqueeze(0)
 
             x_bicubic = torch.clip(
                 F.interpolate(
@@ -162,8 +169,8 @@ def eval_video(
             cv2.imshow('rendering', cv2_out)
             cv2.waitKey(1)
 
-    t0 = Thread(target=read_pic, args=(reader, frame_queue)).start()
-    t1 = Thread(target=show_pic, args=(cap, out_queue)).start()
+    Thread(target=read_pic, args=(reader, frame_queue)).start()
+    Thread(target=show_pic, args=(cap, out_queue)).start()
     target_fps = cap.get(cv2.CAP_PROP_FPS)
     target_frame_time = 1000 / target_fps
 
