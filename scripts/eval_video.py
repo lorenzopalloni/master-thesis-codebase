@@ -113,7 +113,7 @@ def eval_video(
     cap = cv2.VideoCapture(video_path.as_posix())
     reader = torchvision.io.VideoReader(video_path.as_posix(), 'video')
 
-    if write_to_video:
+    if enable_write_to_video:
         fourcc = cv2.VideoWriter_fourcc(*'MP4V')
         hr_video_writer = cv2.VideoWriter(
             'rendered.mp4', fourcc, 30, (1920, 1080)
@@ -133,7 +133,7 @@ def eval_video(
 
     def read_pic(cap, q):
         count = 0
-        start = time.time()
+        # start = time.time()
         while True:
             cv2_im = next(cap)['data']
             cv2_im = cv2_im.cpu().float()
@@ -162,8 +162,8 @@ def eval_video(
             cv2.imshow('rendering', cv2_out)
             cv2.waitKey(1)
 
-    Thread(target=read_pic, args=(reader, frame_queue)).start()
-    Thread(target=show_pic, args=(cap, out_queue)).start()
+    t0 = Thread(target=read_pic, args=(reader, frame_queue)).start()
+    t1 = Thread(target=show_pic, args=(cap, out_queue)).start()
     target_fps = cap.get(cv2.CAP_PROP_FPS)
     target_frame_time = 1000 / target_fps
 
@@ -202,11 +202,11 @@ def eval_video(
 
 if __name__ == '__main__':
     default_cfg = get_default_config()
-    default_cfg.model.ckpt_path_to_resume = Path(
-        default_cfg.paths.artifacts_dir,
-        "checkpoints",
-        "2022_11_15_07_43_30/unet_0_39999.pth"
-    )
+    # default_cfg.model.ckpt_path_to_resume = Path(
+    #     default_cfg.paths.artifacts_dir,
+    #     "checkpoints",
+    #     "2022_11_15_07_43_30/unet_0_39999.pth"
+    # )
     default_cfg.params.buffer_size = 1
     default_cfg.model.name = 'unet'
 
@@ -219,6 +219,7 @@ if __name__ == '__main__':
         default_cfg.paths.project_dir,
         "tests/assets/compressed_videos/homer_arch_512x372_120K.mp4"
     )
+    print(video_path)
 
     eval_video(
         cfg=default_cfg,
