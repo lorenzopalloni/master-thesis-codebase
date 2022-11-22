@@ -29,7 +29,7 @@ from tqdm import tqdm
 # from apex import amp
 
 
-def save_with_cv(pic, imname):
+def save_with_cv2(pic, imname):
     pic = dl.de_normalize(pic.squeeze(0))
     npimg = np.transpose(pic.cpu().numpy(), (1, 2, 0)) * 255
     npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
@@ -84,7 +84,7 @@ def pad_input(x, padH, padW):
     return x
 
 
-def cv2toTorch(im):
+def cv2_to_torch(im):
     im = im / 255
     im = torch.Tensor(im).cuda()
     im = im.permute(2, 0, 1).unsqueeze(0)
@@ -92,7 +92,7 @@ def cv2toTorch(im):
     return im
 
 
-def torchToCv2(pic, rescale_factor=1.0):
+def torch_to_cv2(pic, rescale_factor=1.0):
     if rescale_factor != 1.0:
         pic = F.interpolate(
             pic,
@@ -202,7 +202,7 @@ if __name__ == '__main__':
         while True:
             out = q.get()
             scale = 1
-            cv2_out = torchToCv2(out, rescale_factor=scale)
+            cv2_out = torch_to_cv2(out, rescale_factor=scale)
             cv2.imshow('rendering', cv2_out)
             cv2.waitKey(1)
 
