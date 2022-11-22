@@ -18,7 +18,7 @@ from tqdm import tqdm
 from binarization.config import get_default_config
 from binarization.datatools import (
     adjust_image_for_unet,
-    inv_adjust_image_for_unet,
+    # inv_adjust_image_for_unet,
     inv_min_max_scaler,
     min_max_scaler,
 )
@@ -65,12 +65,12 @@ def write_to_video(pic, writer):
     writer.write(npimg)
 
 
-def cv2_to_torch(im):
-    im = im / 255
-    im = torch.Tensor(im).cuda()
-    im = im.permute(2, 0, 1).unsqueeze(0)
-    im = min_max_scaler(im)
-    return im
+def cv2_to_torch(numpy_img: npt.NDArray[np.uint8]) -> torch.Tensor:
+    numpy_img = numpy_img / 255
+    torch_img = torch.Tensor(numpy_img).cuda()
+    torch_img = torch.img.permute(2, 0, 1).unsqueeze(0)
+    torch_img = min_max_scaler(torch_img)
+    return torch_img
 
 
 def torch_to_cv2(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
@@ -81,13 +81,14 @@ def torch_to_cv2(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
     return numpy_img
 
 
-def blend_images(i1, i2):
-    w = i1.shape[-1]
-    w_4 = w // 4
-    i1 = i1[:, :, :, w_4 : w_4 * 3]
-    i2 = i2[:, :, :, w_4 : w_4 * 3]
-    out = torch.cat([i1, i2], dim=3)
-    return out
+def blend_images(img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
+    assert img1.shape[-1] == img2.shape[-1], \
+        f"{img1.shape=} not equal to {img2.shape=}."
+    width = img1.shape[-1]
+    w_4 = width // 4
+    cropped_i1 = img1[:, :, :, w_4 : w_4 * 3]
+    cropped_i2 = img2[:, :, :, w_4 : w_4 * 3]
+    return torch.cat([cropped_i1, cropped_i2], dim=3)
 
 
 def eval_video(
@@ -119,33 +120,38 @@ def eval_video(
 
     reader.seek(0)
 
+    def resize_torch_img(
+        torch_img: torch.Tensor,
+        scale_factor: int = 4
+    ) -> torch.Tensor:
+        return torch.clip(
+            F.interpolate(
+                torch_img,
+                scale_factor=scale_factor,
+                mode='bicubic',
+            ),
+            min=0,
+            max=1,
+        )
+
     def read_pic(cap, q: Queue, scale_factor: int = 4):
         while True:
-            x = next(cap)['data']
-            x = min_max_scaler(x)
-            x = adjust_image_for_unet(x).unsqueeze(0)
+            img = next(cap)['data']
+            img = min_max_scaler(img)
+            img = adjust_image_for_unet(img).unsqueeze(0)
+            resized_img = resize_torch_img(img, scale_factor)
+            q.put((img, resized_img))
 
-            x_bicubic = torch.clip(
-                F.interpolate(
-                    x,
-                    scale_factor=scale_factor,
-                    mode='bicubic',
-                ),
-                min=0,
-                max=1,
-            )
-
-            q.put((x, x_bicubic))
-
-    def show_pic(cap, q):
+    def show_pic(q):
         while True:
-            out = q.get()
-            cv2_out = torch_to_cv2(out)
-            cv2.imshow('rendering', cv2_out)
+            torch_img = q.get()
+            img = torch_to_cv2(torch_img)
+            img = cv2.resize(img, (64, 64))  # NOTE: remove this /!\
+            cv2.imshow('rendering', img)
             cv2.waitKey(1)
 
     Thread(target=read_pic, args=(reader, frame_queue, scale_factor)).start()
-    Thread(target=show_pic, args=(cap, out_queue)).start()
+    Thread(target=show_pic, args=(out_queue,)).start()
     target_fps = cap.get(cv2.CAP_PROP_FPS)
     target_frame_time = 1000 / target_fps
 
@@ -156,32 +162,32 @@ def eval_video(
 
             frame_time_start = time.perf_counter()
 
-            x, x_bicubic = frame_queue.get()
-            out = model(x)
+            compressed, resized_compressed = frame_queue.get()
+            generated = model(compressed)
             # out = _out[:, :, : int(height) * scale_factor, : int(width) * scale_factor]
 
-            out_true = i // (target_fps * 3) % 2 == 0
+            # out_true = i // (target_fps * 3) % 2 == 0
 
             if enable_show_compressed:
-                out = blend_images(x_bicubic, out)
+                generated = blend_images(resized_compressed, generated)
 
-            out_queue.put(out)
+            out_queue.put(generated)
 
             frame_time = time.perf_counter() - frame_time_start
 
             if frame_time < target_frame_time * 1e-3:
                 time.sleep(target_frame_time * 1e-3 - frame_time)
 
-            # if enable_write_to_video:
-            #     write_to_video(out, hr_video_writer)
-            #     if i == 30 * 10:
-            #         hr_video_writer.release()
-            #         print("Releasing video")
+            if enable_write_to_video:
+                write_to_video(generated, hr_video_writer)
+                if i == 30 * 10:
+                    hr_video_writer.release()
+                    print("Releasing video")
 
-            # tqdm_.set_description((
-            #     f"frame time: {frame_time * 1e3}; "
-            #     f"fps: {1000 / frame_time}; {out_true}"
-            # ))
+            tqdm_.set_description((
+                f"frame time: {frame_time * 1e3}; "
+                f"fps: {1000 / frame_time}; {out_true}"
+            ))
 
 
 if __name__ == '__main__':
