@@ -1,44 +1,40 @@
-"""Script to evaluate a trained super-resolution model"""
+from __future__ import annotations
 
-### binarization/vaccaro/render.py - START
 import time
 from pathlib import Path
+from queue import Queue
 from threading import Thread
 
 import cv2
-import data_loader as dl
 import matplotlib.pyplot as plt
-import torch
-import torchvision
-import torchvision.transforms.functional as F
-from tqdm import tqdm
-
-from binarization import dataset, train
-from binarization.config import Gifnoc, get_default_config
-
-torch.backends.cudnn.benchmark = True
-from queue import Queue
-
-import cv2
 import numpy as np
-import utils
-from models import *
-from pytorch_unet import SimpleResNet, SRUnet, UNet
+import numpy.typing as npt
+import torch
+import torch.nn.functional as F
+import torchvision
+from gifnoc import Gifnoc
 from tqdm import tqdm
 
-# from apex import amp
+from binarization.config import get_default_config
+from binarization.datatools import (  # inv_adjust_image_for_unet,
+    adjust_image_for_unet,
+    inv_min_max_scaler,
+    min_max_scaler,
+)
+from binarization.traintools import set_up_generator
+
+torch.backends.cudnn.benchmark = False  # Defaults to True
 
 
-def save_with_cv2(pic, imname):
-    pic = dl.de_normalize(pic.squeeze(0))
-    npimg = np.transpose(pic.cpu().numpy(), (1, 2, 0)) * 255
-    npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
-
-    cv2.imwrite(imname, npimg)
+def save_with_cv2(tensor_img: torch.Tensor, path: str) -> None:
+    tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
+    numpy_img = np.transpose(tensor_img.cpu().numpy(), (1, 2, 0)) * 255
+    numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
+    cv2.imwrite(path, numpy_img)
 
 
 def write_to_video(pic, writer):
-    pic = dl.de_normalize(pic.squeeze(0))
+    pic = inv_min_max_scaler(pic.squeeze(0))
     npimg = np.transpose(pic.cpu().numpy(), (1, 2, 0)) * 255
     npimg = npimg.astype('uint8')
     npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
@@ -68,94 +64,76 @@ def write_to_video(pic, writer):
     writer.write(npimg)
 
 
-def get_padded_dim(H_x, W_x, border=0, mod=16):
-    modH, modW = H_x % (mod + border), W_x % (mod + border)
-    padW = ((mod + border) - modW) % (mod + border)
-    padH = ((mod + border) - modH) % (mod + border)
-
-    new_H = H_x + padH
-    new_W = W_x + padW
-
-    return new_H, new_W, padH, padW
+def cv2_to_torch(numpy_img: npt.NDArray[np.uint8]) -> torch.Tensor:
+    numpy_img = numpy_img / 255
+    torch_img = torch.Tensor(numpy_img).cuda()
+    torch_img = torch.img.permute(2, 0, 1).unsqueeze(0)
+    torch_img = min_max_scaler(torch_img)
+    return torch_img
 
 
-def pad_input(x, padH, padW):
-    x = F.pad(x, [0, padW, 0, padH])
-    return x
+def torch_to_cv2(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
+    tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
+    tensor_img = tensor_img.permute(1, 2, 0)
+    numpy_img = tensor_img.byte().cpu().numpy()
+    numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
+    return numpy_img
 
 
-def cv2_to_torch(im):
-    im = im / 255
-    im = torch.Tensor(im).cuda()
-    im = im.permute(2, 0, 1).unsqueeze(0)
-    im = dl.normalize_img(im)
-    return im
+def blend_images(img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
+    assert (
+        img1.shape[-1] == img2.shape[-1]
+    ), f"{img1.shape=} not equal to {img2.shape=}."
+    width = img1.shape[-1]
+    w_4 = width // 4
+    cropped_i1 = img1[:, :, :, w_4 : w_4 * 3]
+    cropped_i2 = img2[:, :, :, w_4 : w_4 * 3]
+    return torch.cat([cropped_i1, cropped_i2], dim=3)
 
 
-def torch_to_cv2(pic, rescale_factor=1.0):
-    if rescale_factor != 1.0:
-        pic = F.interpolate(
-            pic,
-            scale_factor=rescale_factor,
-            align_corners=True,
+def resize_torch_img(
+    torch_img: torch.Tensor, scale_factor: int = 4
+) -> torch.Tensor:
+    return torch.clip(
+        F.interpolate(
+            torch_img,
+            scale_factor=scale_factor,
             mode='bicubic',
-        )
-    pic = dl.de_normalize(pic.squeeze(0))
-    pic = pic.permute(1, 2, 0) * 255
-    npimg = pic.byte().cpu().numpy()
-    npimg = cv2.cvtColor(npimg, cv2.COLOR_BGR2RGB)
-    return npimg
+        ),
+        min=0,
+        max=1,
+    )
 
 
-def blend_images(i1, i2):
-    w = i1.shape[-1]
-    w_4 = w // 4
-    i1 = i1[:, :, :, w_4 : w_4 * 3]
-    i2 = i2[:, :, :, w_4 : w_4 * 3]
-    out = torch.cat([i1, i2], dim=3)
-    return out
+def read_pic(cap, q: Queue, scale_factor: int = 4):
+    while True:
+        img = next(cap)['data']
+        img = min_max_scaler(img)
+        img = adjust_image_for_unet(img).unsqueeze(0)
+        resized_img = resize_torch_img(img, scale_factor)
+        q.put((img, resized_img))
 
 
-if __name__ == '__main__':
-    args = utils.ARArgs()
-    enable_write_to_video = False
-    arch_name = args.ARCHITECTURE
-    dataset_upscale_factor = args.UPSCALE_FACTOR
+def show_pic(q):
+    while True:
+        torch_img = q.get()
+        img = torch_to_cv2(torch_img)
+        img = cv2.resize(img, (64, 64))  # NOTE: remove this /!\
+        cv2.imshow('rendering', img)
+        cv2.waitKey(1)
 
-    if arch_name == 'srunet':
-        model = SRUnet(
-            3,
-            residual=True,
-            scale_factor=dataset_upscale_factor,
-            n_filters=args.N_FILTERS,
-            downsample=args.DOWNSAMPLE,
-            layer_multiplier=args.LAYER_MULTIPLIER,
-        )
-    elif arch_name == 'unet':
-        model = UNet(
-            3,
-            residual=True,
-            scale_factor=dataset_upscale_factor,
-            n_filters=args.N_FILTERS,
-        )
-    elif arch_name == 'srgan':
-        model = SRResNet()
-    elif arch_name == 'espcn':
-        model = SimpleResNet(n_filters=64, n_blocks=6)
-    else:
-        raise Exception(
-            "Unknown architecture. Select one between:", args.archs
-        )
 
-    model_path = args.MODEL_NAME
-    model.load_state_dict(torch.load(model_path))
-
-    model = model.cuda()
-    model.reparametrize()
-
-    path = args.CLIPNAME
-    cap = cv2.VideoCapture(path)
-    reader = torchvision.io.VideoReader(path, "video")
+def eval_video(
+    cfg: Gifnoc,
+    video_path: Path,
+    enable_show_compressed: bool = True,
+    enable_write_to_video: bool = False,
+):
+    scale_factor = cfg.params.scale_factor
+    device = 'cpu'  # set_up_cuda_device()
+    model = set_up_generator(cfg, device=device)
+    # cap = cv2.VideoCapture(video_path.as_posix())
+    reader = torchvision.io.VideoReader(video_path.as_posix(), 'video')
 
     if enable_write_to_video:
         fourcc = cv2.VideoWriter_fourcc(*'MP4V')
@@ -164,173 +142,90 @@ if __name__ == '__main__':
         )
 
     metadata = reader.get_metadata()
+    fps = metadata['video']['fps']
+    duration = metadata['video']['duration']
+    frame_count = int(fps * duration)
 
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height_fix, width_fix, padH, padW = get_padded_dim(height, width)
+    # frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    # height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    frame_queue = Queue(1)
-    out_queue = Queue(1)
+    q0: Queue = Queue(1)
+    q1: Queue = Queue(1)
 
     reader.seek(0)
 
-    def read_pic(cap, q):
-        count = 0
-        start = time.time()
-        while True:
-            cv2_im = next(cap)['data']  # .cuda().float()
-            cv2_im = cv2_im.cuda().float()
+    t0 = Thread(target=read_pic, args=(reader, q0, scale_factor))
+    t1 = Thread(target=show_pic, args=(q1,))
+    t0.start()
+    t1.start()
 
-            x = dl.normalize_img(cv2_im / 255.0).unsqueeze(0)
-
-            x_bicubic = torch.clip(
-                F.interpolate(
-                    x,
-                    scale_factor=args.UPSCALE_FACTOR * args.DOWNSAMPLE,
-                    mode='bicubic',
-                ),
-                min=-1,
-                max=1,
-            )
-
-            x = F.pad(x, [0, padW, 0, padH])
-            count += 1
-            q.put((x, x_bicubic))
-
-    def show_pic(cap, q):
-        while True:
-            out = q.get()
-            scale = 1
-            cv2_out = torch_to_cv2(out, rescale_factor=scale)
-            cv2.imshow('rendering', cv2_out)
-            cv2.waitKey(1)
-
-    t1 = Thread(target=read_pic, args=(reader, frame_queue)).start()
-    t2 = Thread(target=show_pic, args=(cap, out_queue)).start()
-    target_fps = cap.get(cv2.CAP_PROP_FPS)
-    target_frametime = 1000 / target_fps
+    # target_fps = cap.get(cv2.CAP_PROP_FPS)
+    target_frame_time = 1000 / fps  # not sure about this
 
     model = model.eval()
     with torch.no_grad():
         tqdm_ = tqdm(range(frame_count))
         for i in tqdm_:
-            t0 = time.time()
 
-            x, x_bicubic = frame_queue.get()
-            out = model(x)[:, :, : int(height) * 2, : int(width) * 2]
+            tic = time.perf_counter()
 
-            out_true = i // (target_fps * 3) % 2 == 0
+            compressed, resized_compressed = q0.get()
+            generated = model(compressed)
+            # out = _out[:, :, : int(height) * scale_factor, : int(width) * scale_factor]
 
-            if not args.SHOW_ONLY_HQ:
-                out = blend_images(x_bicubic, out)
-            out_queue.put(out)
-            frametime = time.time() - t0
-            if frametime < target_frametime * 1e-3:
-                time.sleep(target_frametime * 1e-3 - frametime)
+            out_true = i // (fps * 3) % 2 == 0
+
+            if enable_show_compressed:
+                generated = blend_images(resized_compressed, generated)
+
+            q1.put(generated)
+
+            toc = time.perf_counter()
+            elapsed = toc - tic
+
+            if elapsed < target_frame_time * 1e-3:
+                time.sleep(target_frame_time * 1e-3 - elapsed)
 
             if enable_write_to_video:
-                write_to_video(out, hr_video_writer)
+                write_to_video(generated, hr_video_writer)
                 if i == 30 * 10:
                     hr_video_writer.release()
                     print("Releasing video")
 
             tqdm_.set_description(
-                "frame time: {}; fps: {}; {}".format(
-                    frametime * 1e3, 1000 / frametime, out_true
+                (
+                    f"frame time: {frame_time * 1e3}; "
+                    f"fps: {1000 / frame_time}; {out_true}"
                 )
             )
-### binarization/vaccaro/render.py - END
 
 
-def inv_adjust_image_for_unet(
-    generated: torch.Tensor, original: torch.Tensor
-) -> torch.Tensor:
-    height_generated, width_generated = (
-        generated.shape[-2],
-        generated.shape[-1],
-    )
-    height_original, width_original = original.shape[-2], original.shape[-1]
-    height_offset = (height_generated - height_original) // 2
-    width_offset = (width_generated - width_original) // 2
-    return F.crop(
-        generated, height_offset, width_offset, height_original, width_original
+if __name__ == '__main__':
+    default_cfg = get_default_config()
+    default_cfg.model.ckpt_path_to_resume = Path(
+        default_cfg.paths.artifacts_dir,
+        "best_checkpoints",
+        "2022_11_21_unet.pth",
     )
 
+    default_cfg.params.buffer_size = 1
+    default_cfg.model.name = 'unet'
 
-def process_raw_generated(
-    generated: torch.Tensor, original: torch.Tensor
-) -> torch.Tensor:
-    """Postprocesses outputs from super-resolution generator models"""
-    out = generated
-    out = dataset.inv_min_max_scaler(out)
-    out = out.clip(0, 255)
-    out = out / 255.0
-    out = inv_adjust_image_for_unet(out, original)
-    return out
-
-
-def main(cfg: Gifnoc):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    gen = train.set_up_generator(cfg)
-    gen.to(device)
-    video_fp = Path('hola.mp4')
-    cap = cv2.VideoCapture(video_fp)
-    reader = torchvision.io.VideoReader(video_fp, 'video')
-
-
-def main(cfg: Gifnoc):
-    save_dir = cfg.paths.outputs_dir / cfg.model.ckpt_path_to_resume.stem
-    save_dir.mkdir(exist_ok=True, parents=True)
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    whole_images_dataset = dataset.WholeImagesDataset(
-        original_frames_dir=cfg.paths.val_original_frames_dir,
-        compressed_frames_dir=cfg.paths.val_compressed_frames_dir,
+    # video_path = Path(
+    #     default_cfg.paths.data_dir,
+    #     'compressed_videos',
+    #     'DFireS18Mitch_480x272_24fps_10bit_420.mp4'
+    # )
+    video_path = Path(
+        default_cfg.paths.project_dir,
+        "tests/assets/compressed_videos/homer_arch_512x372_120K.mp4",
     )
-    dl_val = dataset.DataLoader(
-        dataset=whole_images_dataset,
-        batch_size=cfg.params.batch_size,
-        shuffle=None,
+    print(video_path)
+
+    eval_video(
+        cfg=default_cfg,
+        video_path=video_path,
+        enable_show_compressed=True,
+        enable_write_to_video=False,
     )
-    progress_bar_val = tqdm(dl_val)
-    gen = train.set_up_generator(cfg)
-    gen.to(device)
-    counter = 0
-    for step_id_val, (compressed_val, original_val) in enumerate(
-        progress_bar_val
-    ):
-
-        compressed_val = compressed_val.to(device)
-        original_val = original_val.to(device)
-
-        compressed_val = dataset.adjust_image_for_unet(compressed_val)
-
-        gen.eval()
-        with torch.no_grad():
-            generated_val = gen(compressed_val)
-
-        original_val = original_val.cpu()
-        generated_val = generated_val.cpu()
-        compressed_val = compressed_val.cpu()
-        generated_val = process_raw_generated(generated_val, original_val)
-
-        for i in range(original_val.shape[0]):
-            fig = dataset.draw_validation_fig(
-                original_image=original_val[i],
-                compressed_image=compressed_val[i],
-                generated_image=generated_val[i],
-            )
-            save_path = save_dir / f'validation_fig_{counter}.jpg'
-            counter += 1
-            fig.savefig(save_path)
-            plt.close(fig)  # close the current fig to prevent OOM issues
-
-
-if __name__ == "__main__":
-    cfg = get_default_config()
-    # default_config.params.ckpt_path_to_resume = Path('/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_28_epoch_9.pth')
-    cfg.model.ckpt_path_to_resume = Path(
-        '/home/loopai/Projects/binarization/artifacts/best_checkpoints/2022_08_31_epoch_13.pth'
-    )
-    cfg.params.batch_size = 10
-    main(cfg)

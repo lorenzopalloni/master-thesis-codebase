@@ -16,9 +16,8 @@ from gifnoc import Gifnoc
 from tqdm import tqdm
 
 from binarization.config import get_default_config
-from binarization.datatools import (
+from binarization.datatools import (  # inv_adjust_image_for_unet,
     adjust_image_for_unet,
-    # inv_adjust_image_for_unet,
     inv_min_max_scaler,
     min_max_scaler,
 )
@@ -82,13 +81,46 @@ def torch_to_cv2(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
 
 
 def blend_images(img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
-    assert img1.shape[-1] == img2.shape[-1], \
-        f"{img1.shape=} not equal to {img2.shape=}."
+    assert (
+        img1.shape[-1] == img2.shape[-1]
+    ), f"{img1.shape=} not equal to {img2.shape=}."
     width = img1.shape[-1]
     w_4 = width // 4
     cropped_i1 = img1[:, :, :, w_4 : w_4 * 3]
     cropped_i2 = img2[:, :, :, w_4 : w_4 * 3]
     return torch.cat([cropped_i1, cropped_i2], dim=3)
+
+
+def resize_torch_img(
+    torch_img: torch.Tensor, scale_factor: int = 4
+) -> torch.Tensor:
+    return torch.clip(
+        F.interpolate(
+            torch_img,
+            scale_factor=scale_factor,
+            mode='bicubic',
+        ),
+        min=0,
+        max=1,
+    )
+
+
+def read_pic(cap, q: Queue, scale_factor: int = 4):
+    while True:
+        img = next(cap)['data']
+        img = min_max_scaler(img)
+        img = adjust_image_for_unet(img).unsqueeze(0)
+        resized_img = resize_torch_img(img, scale_factor)
+        q.put((img, resized_img))
+
+
+def show_pic(q):
+    while True:
+        torch_img = q.get()
+        img = torch_to_cv2(torch_img)
+        img = cv2.resize(img, (64, 64))  # NOTE: remove this /!\
+        cv2.imshow('rendering', img)
+        cv2.waitKey(1)
 
 
 def eval_video(
@@ -100,7 +132,6 @@ def eval_video(
     scale_factor = cfg.params.scale_factor
     device = 'cpu'  # set_up_cuda_device()
     model = set_up_generator(cfg, device=device)
-    cap = cv2.VideoCapture(video_path.as_posix())
     reader = torchvision.io.VideoReader(video_path.as_posix(), 'video')
 
     if enable_write_to_video:
@@ -109,85 +140,47 @@ def eval_video(
             'rendered.mp4', fourcc, 30, (1920, 1080)
         )
 
-    # metadata = reader.get_metadata()
+    metadata = reader.get_metadata()
+    fps = metadata['video']['fps'][0]
+    duration = metadata['video']['duration'][0]
+    n_frames = int(fps * duration)
 
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    frame_queue: Queue = Queue(1)
-    out_queue: Queue = Queue(1)
+    q0: Queue = Queue(1)
+    q1: Queue = Queue(1)
 
     reader.seek(0)
 
-    def resize_torch_img(
-        torch_img: torch.Tensor,
-        scale_factor: int = 4
-    ) -> torch.Tensor:
-        return torch.clip(
-            F.interpolate(
-                torch_img,
-                scale_factor=scale_factor,
-                mode='bicubic',
-            ),
-            min=0,
-            max=1,
-        )
-
-    def read_pic(cap, q: Queue, scale_factor: int = 4):
-        while True:
-            img = next(cap)['data']
-            img = min_max_scaler(img)
-            img = adjust_image_for_unet(img).unsqueeze(0)
-            resized_img = resize_torch_img(img, scale_factor)
-            q.put((img, resized_img))
-
-    def show_pic(q):
-        while True:
-            torch_img = q.get()
-            img = torch_to_cv2(torch_img)
-            img = cv2.resize(img, (64, 64))  # NOTE: remove this /!\
-            cv2.imshow('rendering', img)
-            cv2.waitKey(1)
-
-    Thread(target=read_pic, args=(reader, frame_queue, scale_factor)).start()
-    Thread(target=show_pic, args=(out_queue,)).start()
-    target_fps = cap.get(cv2.CAP_PROP_FPS)
-    target_frame_time = 1000 / target_fps
+    t0 = Thread(target=read_pic, args=(reader, q0, scale_factor))
+    t1 = Thread(target=show_pic, args=(q1,))
+    t0.start()
+    t1.start()
 
     model = model.eval()
     with torch.no_grad():
-        tqdm_ = tqdm(range(frame_count))
+        tqdm_ = tqdm(range(n_frames))
         for i in tqdm_:
 
-            frame_time_start = time.perf_counter()
+            tic = time.perf_counter()
 
-            compressed, resized_compressed = frame_queue.get()
+            compressed, resized_compressed = q0.get()
             generated = model(compressed)
-            # out = _out[:, :, : int(height) * scale_factor, : int(width) * scale_factor]
-
-            # out_true = i // (target_fps * 3) % 2 == 0
 
             if enable_show_compressed:
                 generated = blend_images(resized_compressed, generated)
 
-            out_queue.put(generated)
+            q1.put(generated)
 
-            frame_time = time.perf_counter() - frame_time_start
+            toc = time.perf_counter()
+            elapsed = toc - tic
 
-            if frame_time < target_frame_time * 1e-3:
-                time.sleep(target_frame_time * 1e-3 - frame_time)
+            # if elapsed < target_frame_time * 1e-3:
+            #     time.sleep(target_frame_time * 1e-3 - elapsed)
 
             if enable_write_to_video:
                 write_to_video(generated, hr_video_writer)
                 if i == 30 * 10:
                     hr_video_writer.release()
                     print("Releasing video")
-
-            tqdm_.set_description((
-                f"frame time: {frame_time * 1e3}; "
-                f"fps: {1000 / frame_time}; {out_true}"
-            ))
 
 
 if __name__ == '__main__':
