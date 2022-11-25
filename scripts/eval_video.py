@@ -6,7 +6,6 @@ from queue import Queue
 from threading import Thread
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import torch
@@ -105,24 +104,6 @@ def resize_torch_img(
     )
 
 
-def read_pic(cap, q: Queue, scale_factor: int = 4):
-    while True:
-        img = next(cap)['data']
-        img = min_max_scaler(img)
-        img = adjust_image_for_unet(img).unsqueeze(0)
-        resized_img = resize_torch_img(img, scale_factor)
-        q.put((img, resized_img))
-
-
-def show_pic(q):
-    while True:
-        torch_img = q.get()
-        img = torch_to_cv2(torch_img)
-        img = cv2.resize(img, (64, 64))  # NOTE: remove this /!\
-        cv2.imshow('rendering', img)
-        cv2.waitKey(1)
-
-
 def eval_video(
     cfg: Gifnoc,
     video_path: Path,
@@ -150,6 +131,22 @@ def eval_video(
 
     reader.seek(0)
 
+    def read_pic(cap, q: Queue, scale_factor: int = 4):
+        while True:
+            img = next(cap)['data']
+            img = min_max_scaler(img)
+            img = adjust_image_for_unet(img).unsqueeze(0)
+            resized_img = resize_torch_img(img, scale_factor)
+            q.put((img, resized_img))
+
+    def show_pic(q):
+        while True:
+            torch_img = q.get()
+            img = torch_to_cv2(torch_img)
+            # img = cv2.resize(img, (64, 64))  # NOTE: remove this /!\
+            cv2.imshow('rendering', img)
+            cv2.waitKey(1)
+
     t0 = Thread(target=read_pic, args=(reader, q0, scale_factor))
     t1 = Thread(target=show_pic, args=(q1,))
     t0.start()
@@ -173,8 +170,8 @@ def eval_video(
             toc = time.perf_counter()
             elapsed = toc - tic
 
-            # if elapsed < target_frame_time * 1e-3:
-            #     time.sleep(target_frame_time * 1e-3 - elapsed)
+            if elapsed < fps * 1e-3:
+                time.sleep(fps * 1e-3 - elapsed)
 
             if enable_write_to_video:
                 write_to_video(generated, hr_video_writer)
@@ -199,15 +196,14 @@ if __name__ == '__main__':
     #     'compressed_videos',
     #     'DFireS18Mitch_480x272_24fps_10bit_420.mp4'
     # )
-    video_path = Path(
+    homer_video_path = Path(
         default_cfg.paths.project_dir,
         "tests/assets/compressed_videos/homer_arch_512x372_120K.mp4",
     )
-    print(video_path)
 
     eval_video(
         cfg=default_cfg,
-        video_path=video_path,
+        video_path=homer_video_path,
         enable_show_compressed=True,
         enable_write_to_video=False,
     )
