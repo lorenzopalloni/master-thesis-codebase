@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from functools import partial
 from pathlib import Path
 from queue import Queue
 from threading import Thread
@@ -17,6 +18,7 @@ from tqdm import tqdm
 from binarization.config import get_default_config
 from binarization.datatools import (  # inv_adjust_image_for_unet,
     adjust_image_for_unet,
+    compute_adjusted_dimension,
     inv_min_max_scaler,
     min_max_scaler,
 )
@@ -48,15 +50,15 @@ def tensor_to_numpy(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
     return numpy_img
 
 
-def blend_images(
+def concatenate_images(
     img1: torch.Tensor,
     img2: torch.Tensor,
-    shrink: bool = False,
+    crop: bool = False,
 ) -> torch.Tensor:
     assert (
         img1.shape[-1] == img2.shape[-1]
     ), f"{img1.shape=} not equal to {img2.shape=}."
-    if shrink:
+    if crop:
         width = img1.shape[-1]
         w_4 = width // 4
         img1 = img1[:, :, :, w_4 : w_4 * 3]
@@ -84,28 +86,26 @@ def write_to_video(tensor_img: torch.Tensor, writer: cv2.VideoWriter) -> None:
     offset = int(min(w, h) * 0.05)
 
     font = cv2.FONT_HERSHEY_SIMPLEX
-
-    cv2.putText(
+    cv2_put_text = partial(
+        cv2.putText,
         img=numpy_img,
-        text='bicubic interpolation',
-        # org=(50, 1030),
-        org=(offset, h - offset),
         fontFace=font,
         fontScale=0.5,
         color=(10, 10, 10),
         thickness=2,
         lineType=cv2.LINE_AA,
     )
-    cv2.putText(
-        img=numpy_img,
+
+    cv2_put_text(
+        text='bicubic interpolation',
+        # org=(50, 1030),
+        org=(offset, h - offset),
+    )
+
+    cv2_put_text(
         text='Unet (ours)',
         # org=(1920 // 2 + 50, 1020),
         org=(w // 2 + offset, h - offset),
-        fontFace=font,
-        fontScale=0.5,
-        color=(10, 10, 10),
-        thickness=2,
-        lineType=cv2.LINE_AA,
     )
 
     writer.write(numpy_img)
@@ -127,14 +127,24 @@ def eval_video(
     duration = metadata['video']['duration'][0]
     n_frames = int(fps * duration)
 
+    temp_capture = cv2.VideoCapture(video_path.as_posix())
+    width = int(temp_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(temp_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    adjusted_width = compute_adjusted_dimension(width)
+    adjusted_height = compute_adjusted_dimension(height)
+    del temp_capture
+
     if enable_write_to_video:
+        frame_width = (
+            adjusted_width * scale_factor * (2 ** int(enable_show_compressed))
+        )
+        frame_height = adjusted_height * scale_factor
         fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-        hr_video_writer = cv2.VideoWriter(
+        writer = cv2.VideoWriter(
             filename='rendered.mp4',
             fourcc=fourcc,
             fps=30,
-            # frameSize=(1920, 1080),
-            frameSize=(1024, 384),
+            frameSize=(frame_width, frame_height),
         )
 
     queue0: Queue = Queue(1)
@@ -176,9 +186,7 @@ def eval_video(
             generated = model(compressed).clip(0, 1)
 
             if enable_show_compressed:
-                generated = blend_images(
-                    resized_compressed, generated, shrink=False
-                )
+                generated = concatenate_images(resized_compressed, generated)
 
             queue1.put(generated)
 
@@ -189,10 +197,10 @@ def eval_video(
                 time.sleep(fps * 1e-3 - elapsed)
 
             if enable_write_to_video:
-                write_to_video(generated, hr_video_writer)
+                write_to_video(generated, writer)
                 # if i == 30 * 10:
                 if i == n_frames - 1:
-                    hr_video_writer.release()
+                    writer.release()
                     print("Releasing video")
 
 
