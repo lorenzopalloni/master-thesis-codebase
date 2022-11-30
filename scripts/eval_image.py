@@ -12,9 +12,9 @@ from tqdm import tqdm
 from binarization.config import Gifnoc, get_default_config
 from binarization.dataset import get_test_batches
 from binarization.datatools import (
-    adjust_image_for_unet,
     draw_validation_fig,
-    process_raw_generated,
+    make_4times_downscalable,
+    postprocess,
 )
 from binarization.traintools import set_up_generator
 
@@ -41,7 +41,7 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
 
         original = original.to(device)
         compressed = compressed.to(device)
-        compressed = adjust_image_for_unet(compressed)
+        compressed = make_4times_downscalable(compressed)
 
         gen.eval()
         with torch.no_grad():
@@ -50,9 +50,7 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
         original = original.cpu()
         compressed = compressed.cpu()
         generated = generated.cpu()
-        generated = process_raw_generated(
-            original=original, generated=generated
-        )
+        generated = postprocess(original=original, generated=generated)
 
         for i in range(original.shape[0]):
             fig = draw_validation_fig(
@@ -71,7 +69,7 @@ if __name__ == "__main__":
     default_cfg.model.ckpt_path_to_resume = Path(
         default_cfg.paths.artifacts_dir,
         "checkpoints",
-        "2022_11_15_07_43_30/unet_2_191268.pth"
+        "2022_11_15_07_43_30/unet_2_191268.pth",
     )
     default_cfg.params.buffer_size = 1
     default_cfg.model.name = 'unet'

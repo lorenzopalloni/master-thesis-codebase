@@ -7,85 +7,31 @@ from queue import Queue
 from threading import Thread
 
 import cv2
-import numpy as np
-import numpy.typing as npt
 import torch
-import torch.nn.functional as F
 import torchvision
 from gifnoc import Gifnoc
 from tqdm import tqdm
 
 from binarization.config import get_default_config
-from binarization.datatools import (  # inv_adjust_image_for_unet,
-    adjust_image_for_unet,
-    compute_adjusted_dimension,
-    inv_min_max_scaler,
+from binarization.datatools import (
+    bicubic_interpolation,
+    concatenate_images,
+    make_4times_divisible,
+    make_4times_downscalable,
     min_max_scaler,
+    tensor_to_numpy,
 )
 from binarization.traintools import set_up_generator
 
 torch.backends.cudnn.benchmark = False  # Defaults to True
 
 
-def save_with_cv2(tensor_img: torch.Tensor, path: str) -> None:
-    tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
-    numpy_img = np.transpose(tensor_img.cpu().numpy(), (1, 2, 0)) * 255
-    numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(path, numpy_img)
-
-
-def cv2_to_torch(numpy_img: npt.NDArray[np.uint8]) -> torch.Tensor:
-    scaled_numpy_img: npt.NDArray[np.float64] = numpy_img / 255
-    tensor_img = torch.Tensor(scaled_numpy_img).cuda()
-    tensor_img = tensor_img.permute(2, 0, 1).unsqueeze(0)
-    tensor_img = min_max_scaler(tensor_img)
-    return tensor_img
-
-
-def tensor_to_numpy(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
-    tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
-    tensor_img = tensor_img.permute(1, 2, 0)
-    numpy_img = tensor_img.byte().cpu().numpy()
-    numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
-    return numpy_img
-
-
-def concatenate_images(
-    img1: torch.Tensor,
-    img2: torch.Tensor,
-    crop: bool = False,
-) -> torch.Tensor:
-    assert (
-        img1.shape[-1] == img2.shape[-1]
-    ), f"{img1.shape=} not equal to {img2.shape=}."
-    if crop:
-        width = img1.shape[-1]
-        w_4 = width // 4
-        img1 = img1[:, :, :, w_4 : w_4 * 3]
-        img2 = img2[:, :, :, w_4 : w_4 * 3]
-    return torch.cat([img1, img2], dim=3)
-
-
-def resize_tensor_img(
-    tensor_img: torch.Tensor, scale_factor: int = 4
-) -> torch.Tensor:
-    return torch.clip(
-        F.interpolate(
-            tensor_img,
-            scale_factor=scale_factor,
-            mode='bicubic',
-        ),
-        min=0,
-        max=1,
-    )
-
-
 def write_to_video(tensor_img: torch.Tensor, writer: cv2.VideoWriter) -> None:
     numpy_img = tensor_to_numpy(tensor_img)
     h, w, _ = numpy_img.shape
     offset = int(min(w, h) * 0.05)
-
     font = cv2.FONT_HERSHEY_SIMPLEX
+
     cv2_put_text = partial(
         cv2.putText,
         img=numpy_img,
@@ -96,17 +42,8 @@ def write_to_video(tensor_img: torch.Tensor, writer: cv2.VideoWriter) -> None:
         lineType=cv2.LINE_AA,
     )
 
-    cv2_put_text(
-        text='bicubic interpolation',
-        # org=(50, 1030),
-        org=(offset, h - offset),
-    )
-
-    cv2_put_text(
-        text='Unet (ours)',
-        # org=(1920 // 2 + 50, 1020),
-        org=(w // 2 + offset, h - offset),
-    )
+    cv2_put_text(text='bicubic interpolation', org=(offset, h - offset))
+    cv2_put_text(text='Unet (ours)', org=(w // 2 + offset, h - offset))
 
     writer.write(numpy_img)
 
@@ -127,11 +64,12 @@ def eval_video(
     duration = metadata['video']['duration'][0]
     n_frames = int(fps * duration)
 
+    # use cv2.VideoCapture to get w/h of the video
     temp_capture = cv2.VideoCapture(video_path.as_posix())
     width = int(temp_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(temp_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    adjusted_width = compute_adjusted_dimension(width)
-    adjusted_height = compute_adjusted_dimension(height)
+    adjusted_width = make_4times_divisible(width)
+    adjusted_height = make_4times_divisible(height)
     del temp_capture
 
     if enable_write_to_video:
@@ -155,29 +93,33 @@ def eval_video(
     def read_pic(
         reader: torchvision.io.VideoReader, queue: Queue, scale_factor: int = 4
     ) -> None:
-        while True:
-            img = next(reader)['data']
+        for frame in reader:
+            img = frame['data']
             img = min_max_scaler(img)
-            img = adjust_image_for_unet(img).unsqueeze(0)
-            resized_img = resize_tensor_img(img, scale_factor)
-            queue.put((img, resized_img))
+            img = make_4times_downscalable(img).unsqueeze(0)
+            interpolated_img = bicubic_interpolation(img, scale_factor)
+            queue.put((img, interpolated_img))
+            queue.task_done()
 
     def show_pic(queue):
         while True:
             tensor_img = queue.get()
             img = tensor_to_numpy(tensor_img)
-            # img = cv2.resize(img, (64, 64))  # NOTE: remove this /!\
+            # img = cv2.resize(img, (1000, 500))  # NOTE: remove this /!\
             cv2.imshow('rendering', img)
             cv2.waitKey(1)
+            queue.task_done()
 
-    thread0 = Thread(target=read_pic, args=(reader, queue0, scale_factor))
-    thread1 = Thread(target=show_pic, args=(queue1,))
+    thread0 = Thread(
+        target=read_pic, args=(reader, queue0, scale_factor), daemon=True
+    )
+    thread1 = Thread(target=show_pic, args=(queue1,), daemon=True)
     thread0.start()
     thread1.start()
 
     model = model.eval()
     with torch.no_grad():
-        tqdm_ = tqdm(range(n_frames))
+        tqdm_ = tqdm(range(n_frames), disable=True)
         for i in tqdm_:
 
             tic = time.perf_counter()
@@ -193,15 +135,16 @@ def eval_video(
             toc = time.perf_counter()
             elapsed = toc - tic
 
-            if elapsed < fps * 1e-3:
-                time.sleep(fps * 1e-3 - elapsed)
+            expected_time_between_frames = fps / 1000
+            if elapsed < expected_time_between_frames:
+                time.sleep(expected_time_between_frames - elapsed)
 
             if enable_write_to_video:
                 write_to_video(generated, writer)
-                # if i == 30 * 10:
                 if i == n_frames - 1:
                     writer.release()
-                    print("Releasing video")
+    queue0.join()
+    queue1.join()
 
 
 if __name__ == '__main__':

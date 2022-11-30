@@ -49,9 +49,9 @@ def test_compose():
 
 
 def test_compute_adjusted_dimension():
-    assert datatools.compute_adjusted_dimension(256) == 256
-    assert datatools.compute_adjusted_dimension(270) == 288
-    assert datatools.compute_adjusted_dimension(540) == 544
+    assert datatools.make_4times_divisible(256) == 256
+    assert datatools.make_4times_divisible(270) == 288
+    assert datatools.make_4times_divisible(540) == 544
 
 
 class TestListHaveSameElements:
@@ -192,7 +192,9 @@ class TestListFiles:
                 'a_0003.jpg',
             ]
         ]
-        actual = datatools.list_files(my_folder_dir, '.jpg', sort_ascending=False)
+        actual = datatools.list_files(
+            my_folder_dir, '.jpg', sort_ascending=False
+        )
         assert datatools.lists_have_same_elements(expected, actual)
 
 

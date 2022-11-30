@@ -17,8 +17,8 @@ from tqdm import tqdm
 
 from binarization.config import get_default_config
 from binarization.datatools import (  # inv_adjust_image_for_unet,
-    adjust_image_for_unet,
     inv_min_max_scaler,
+    make_4times_downscalable,
     min_max_scaler,
 )
 from binarization.traintools import set_up_generator
@@ -109,7 +109,7 @@ def read_pic(cap, q: Queue, scale_factor: int = 4):
     while True:
         img = next(cap)['data']
         img = min_max_scaler(img)
-        img = adjust_image_for_unet(img).unsqueeze(0)
+        img = make_4times_downscalable(img).unsqueeze(0)
         resized_img = resize_torch_img(img, scale_factor)
         q.put((img, resized_img))
 
