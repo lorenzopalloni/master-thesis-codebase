@@ -1,4 +1,6 @@
 # pylint: disable=missing-module-docstring,missing-class-docstring,too-many-instance-attributes
+"""Default configuration settings"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

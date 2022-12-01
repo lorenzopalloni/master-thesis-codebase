@@ -1,7 +1,8 @@
+# pylint: disable=missing-module-docstring,missing-function-docstring,missing-class-docstring
 import pytest
 
 from scripts.video_preprocessing import (
-    all_files_have_the_same_extension,
+    files_have_same_ext,
     prepare_directories,
     prepare_original_videos_dir,
 )
@@ -13,19 +14,19 @@ class TestAllFilesHaveTheSameExtension:
         d.mkdir()
         (d / 'a.txt').touch()
         (d / 'b.mp4').touch()
-        assert not all_files_have_the_same_extension(d)
+        assert not files_have_same_ext(d)
 
     def test_when_empty(self, tmp_path):
         d = tmp_path / 'original_videos'
         d.mkdir()
-        assert all_files_have_the_same_extension(d)
+        assert files_have_same_ext(d)
 
     def test_when_true(self, tmp_path):
         d = tmp_path / 'original_videos'
         d.mkdir()
         (d / 'a.mp4').touch()
         (d / 'b.mp4').touch()
-        assert all_files_have_the_same_extension(d)
+        assert files_have_same_ext(d)
 
 
 class TestPrepareOriginalDir:
@@ -34,8 +35,9 @@ class TestPrepareOriginalDir:
         d.mkdir()
         (d / 'a.mp4').touch()
         (d / 'b.txt').touch()
-        with pytest.raises(Exception):
-            prepare_original_videos_dir(d)
+        original_dir = prepare_original_videos_dir(d)
+        assert (original_dir / 'a.mp4').exists()
+        assert (original_dir / 'b.txt').exists()
 
     def test_case1(self, tmp_path):
         d = tmp_path / 'data'

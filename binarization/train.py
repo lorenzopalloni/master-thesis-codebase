@@ -1,4 +1,4 @@
-"""Module to train a super-resolution model"""
+"""Training module for super-resolution models"""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import torch
 from tqdm import tqdm
 
 from binarization import models
-from binarization.dataset import get_train_batches, get_val_batches
 from binarization.config import Gifnoc, get_default_config
-from binarization.vaccaro import pytorch_ssim
+from binarization.dataset import get_train_batches, get_val_batches
 from binarization.traintools import (
-    set_up_cuda_device,
     set_up_checkpoints_dir,
+    set_up_cuda_device,
     set_up_generator,
 )
+from binarization.vaccaro import pytorch_ssim
 
 
 def run_training(cfg: Gifnoc):
@@ -48,11 +48,18 @@ def run_training(cfg: Gifnoc):
 
     for epoch_id in range(cfg.params.num_epochs):
         train_batches = get_train_batches(cfg)
-        progress_bar_train = tqdm(train_batches, total=cfg.params.limit_train_batches)
-        for step_id_train, (original, compressed) in enumerate(progress_bar_train):
+        progress_bar_train = tqdm(
+            train_batches, total=cfg.params.limit_train_batches
+        )
+        for step_id_train, (original, compressed) in enumerate(
+            progress_bar_train
+        ):
             # training_step - START
             ##################################################################
-            if (cfg.params.limit_train_batches is not None and step_id_train > cfg.params.limit_train_batches):
+            if (
+                cfg.params.limit_train_batches is not None
+                and step_id_train > cfg.params.limit_train_batches
+            ):
                 break
             gen.train()
             dis.train()
@@ -66,9 +73,13 @@ def run_training(cfg: Gifnoc):
             generated = gen(compressed)  # maybe clip it in [0, 1]
             pred_original = dis(original)
 
-            loss_true = bce_loss_op(pred_original, torch.ones_like(pred_original))
+            loss_true = bce_loss_op(
+                pred_original, torch.ones_like(pred_original)
+            )
             pred_generated = dis(generated.detach())
-            loss_fake = bce_loss_op(pred_generated, torch.zeros_like(pred_generated))
+            loss_fake = bce_loss_op(
+                pred_generated, torch.zeros_like(pred_generated)
+            )
 
             loss_dis = (loss_true + loss_fake) * 0.5
 
@@ -84,7 +95,9 @@ def run_training(cfg: Gifnoc):
             loss_lpips = lpips_vgg_loss_op(generated, original).mean()
             loss_ssim = 1.0 - ssim_op(generated, original)
             pred_generated = dis(generated)
-            loss_bce = bce_loss_op(pred_generated, torch.ones_like(pred_generated))
+            loss_bce = bce_loss_op(
+                pred_generated, torch.ones_like(pred_generated)
+            )
             loss_gen = (
                 cfg.params.w0 * loss_lpips
                 + cfg.params.w1 * loss_ssim
@@ -97,7 +110,7 @@ def run_training(cfg: Gifnoc):
             if (global_step_id + 1) % cfg.params.save_ckpt_every == 0:
                 current_ckpt_path = Path(
                     checkpoints_dir,
-                    f"{cfg.model.name}_{epoch_id}_{global_step_id}.pth"
+                    f"{cfg.model.name}_{epoch_id}_{global_step_id}.pth",
                 )
                 torch.save(gen.state_dict(), current_ckpt_path)
             ##################################################################
@@ -123,11 +136,18 @@ def run_training(cfg: Gifnoc):
             # training_step - END
 
         val_batches = get_val_batches(cfg)
-        progress_bar_val = tqdm(val_batches, total=cfg.params.limit_val_batches)
-        for step_id_val, (original_val, compressed_val) in enumerate(progress_bar_val):
+        progress_bar_val = tqdm(
+            val_batches, total=cfg.params.limit_val_batches
+        )
+        for step_id_val, (original_val, compressed_val) in enumerate(
+            progress_bar_val
+        ):
             # validation_step - START
             ##################################################################
-            if (cfg.params.limit_val_batches is not None and step_id_val > cfg.params.limit_val_batches):
+            if (
+                cfg.params.limit_val_batches is not None
+                and step_id_val > cfg.params.limit_val_batches
+            ):
                 break
             original_val = original_val.to(device)
             compressed_val = compressed_val.to(device)
@@ -135,10 +155,20 @@ def run_training(cfg: Gifnoc):
             with torch.no_grad():
                 generated_val = gen(compressed_val).clip(0, 1)
                 metrics_val: dict[str, int | float] = {}
-                metrics_val['lpips_alex_val'] = lpips_alex_metric_op(generated_val, original_val).mean().item()
-                metrics_val['ssim_val'] = ssim_op(generated_val, original_val).item()
-                metrics_val['psnr_val'] = piq.psnr(generated_val, original_val).item()
-                metrics_val['ms_ssim_val'] = piq.multi_scale_ssim(generated_val, original_val).item()
+                metrics_val['lpips_alex_val'] = (
+                    lpips_alex_metric_op(generated_val, original_val)
+                    .mean()
+                    .item()
+                )
+                metrics_val['ssim_val'] = ssim_op(
+                    generated_val, original_val
+                ).item()
+                metrics_val['psnr_val'] = piq.psnr(
+                    generated_val, original_val
+                ).item()
+                metrics_val['ms_ssim_val'] = piq.multi_scale_ssim(
+                    generated_val, original_val
+                ).item()
                 metrics_val['brisque_val'] = piq.brisque(generated_val).item()
             global_step_id_val += 1
             mlflow.log_metrics(metrics_val, step=global_step_id_val)
@@ -147,7 +177,10 @@ def run_training(cfg: Gifnoc):
 
         # training_epoch_end - START
         ##################################################################
-        current_ckpt_path = Path(checkpoints_dir, f"{cfg.model.name}_{epoch_id}_{global_step_id}.pth")
+        current_ckpt_path = Path(
+            checkpoints_dir,
+            f"{cfg.model.name}_{epoch_id}_{global_step_id}.pth",
+        )
         torch.save(gen.state_dict(), current_ckpt_path)
         ##################################################################
         # training_epoch_end - END

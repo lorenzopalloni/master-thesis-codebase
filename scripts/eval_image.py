@@ -1,5 +1,4 @@
-# pylint: disable=missing-function-docstring
-"""Script to evaluate a super-resolution model"""
+"""Script to evaluate an image with a super-resolution model"""
 
 from __future__ import annotations
 
@@ -20,6 +19,13 @@ from binarization.traintools import set_up_generator
 
 
 def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
+    """Upscales a bunch of images with a super-resolution model.
+
+    Args:
+        cfg (Gifnoc): configuration settings.
+        n_evaluations (Union[int, None], optional): num of images to evaluate.
+            Defaults to None (that means all the available frames).
+    """
     ckpt_path = cfg.model.ckpt_path_to_resume
     save_dir = cfg.paths.outputs_dir / (
         ckpt_path.parent.name + '_' + ckpt_path.stem

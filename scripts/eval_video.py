@@ -1,3 +1,5 @@
+"""Script to evaluate a video with a super-resolution model"""
+
 from __future__ import annotations
 
 import time
@@ -77,7 +79,7 @@ def eval_video(
             adjusted_width * scale_factor * (2 ** int(enable_show_compressed))
         )
         frame_height = adjusted_height * scale_factor
-        fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         writer = cv2.VideoWriter(
             filename='rendered.mp4',
             fourcc=fourcc,

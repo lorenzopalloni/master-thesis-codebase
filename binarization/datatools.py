@@ -13,6 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import PIL
 import torch
+import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 
 
@@ -290,7 +291,7 @@ def bicubic_interpolation(
     tensor_img: torch.Tensor, scale_factor: int = 4
 ) -> torch.Tensor:
     return torch.clip(
-        TF.interpolate(
+        F.interpolate(
             tensor_img,
             scale_factor=scale_factor,
             mode='bicubic',

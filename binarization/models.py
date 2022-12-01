@@ -1,13 +1,12 @@
-from __future__ import annotations
+"""Super-resolution model implementations"""
 
-from typing import Callable
+from __future__ import annotations
 
 import torch
 import torch.nn.functional as F
-from torch import nn
 
 
-class Discriminator(nn.Module):
+class Discriminator(torch.nn.Module):
     """Discriminator model for a Super-Resolution GAN framework.
 
     References:
@@ -48,11 +47,11 @@ class Discriminator(nn.Module):
         """
         super().__init__()
 
-        conv_blocks = list()
+        conv_blocks = []
         all_out_channels = [input_num_channels]
         for i in range(num_blocks):
             in_channels = all_out_channels[-1]
-            out_channels = self._out_channels_helper(
+            out_channels = self.out_channels_helper(
                 i=i, default=all_out_channels[-1], init=num_channels
             )
             all_out_channels.append(out_channels)
@@ -63,31 +62,29 @@ class Discriminator(nn.Module):
                     out_channels=out_channels,
                     kernel_size=kernel_size,
                     stride=1 if i % 2 == 0 else 2,
-                    use_batch_norm=False if i == 0 else True,
-                    activation='LeakyReLu',
-                    use_spectral_norm=False,
+                    use_batch_norm=bool(i),
+                    activation=torch.nn.LeakyReLU(0.2),
                 )
             )
 
-        self.sequential = nn.Sequential(
+        self.sequential = torch.nn.Sequential(
             *conv_blocks,
-            nn.AdaptiveAvgPool2d((6, 6)),
-            nn.Flatten(),
-            nn.Linear(all_out_channels[-1] * 6 * 6, fc_size),
-            nn.LeakyReLU(0.2),
-            nn.Linear(fc_size, 1),
-            nn.Sigmoid(),
+            torch.nn.AdaptiveAvgPool2d((6, 6)),
+            torch.nn.Flatten(),
+            torch.nn.Linear(all_out_channels[-1] * 6 * 6, fc_size),
+            torch.nn.LeakyReLU(0.2),
+            torch.nn.Linear(fc_size, 1),
+            torch.nn.Sigmoid(),
         )
 
     @staticmethod
-    def _out_channels_helper(i: int, default: int, init: int) -> int:
-        """Compute the number of output channels for each Conv block."""
+    def out_channels_helper(i: int, default: int, init: int) -> int:
+        """Computes num of output channels for each ConvBlock."""
         if i == 0:
             return init
-        elif i % 2 == 0:
+        if i % 2 == 0:
             return default * 2
-        else:
-            return default
+        return default
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -108,7 +105,7 @@ class Discriminator(nn.Module):
         return self.sequential(inputs)
 
 
-class ConvBlock(nn.Module):
+class ConvBlock(torch.nn.Module):
     """A convolutional block, comprising convolutional, batch normalization,
     and activation layers.
     """
@@ -120,95 +117,63 @@ class ConvBlock(nn.Module):
         kernel_size: int,
         stride: int = 1,
         use_batch_norm: bool = False,
-        activation: str | None = None,
+        activation: torch.nn.Module | None = None,
         dilation: int = 1,
         groups: int = 1,
-        use_spectral_norm: bool = False,
     ):
         """Convolutional block initializer.
 
         Args:
-            in_channels (int): Number of input channels.
-            out_channels (int): Number of output channels.
-            kernel_size (int): Kernel size for each convolutional block.
-            stride (int, optional): Stride. Defaults to 1.
-            use_batch_norm (bool, optional): Flag for batch normalization.
+            in_channels (int): num of input channels.
+            out_channels (int): num of output channels.
+            kernel_size (int): kernel size for each convolutional block.
+            stride (int, optional): stride. Defaults to 1.
+            use_batch_norm (bool, optional): flag for batch normalization.
                 Defaults to False.
-            activation (str | None, optional): Activation function name.
+            activation (str | None, optional): activation function name.
                 Defaults to None.
-            dilation (int, optional): Defaults to 1.
-            groups (int, optional): Defaults to 1.
-            use_spectral_norm (bool, optional):
-                Flag for spectral normalization. Defaults to False.
+            dilation (int, optional): defaults to 1.
+            groups (int, optional): defaults to 1.
         """
         super().__init__()
 
-        layers: list[torch.nn.Module] = list()
+        layers: list[torch.nn.Module] = []
 
         layers.append(
-            nn.Conv2d(
+            torch.nn.Conv2d(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 kernel_size=kernel_size,
                 stride=stride,
-                padding=(
-                    kernel_size // 2 + dilation // 2
-                    if use_spectral_norm
-                    else kernel_size // 2
-                ),
+                padding=kernel_size // 2,
                 groups=groups,
                 dilation=dilation,
             )
         )
 
-        if use_spectral_norm:
-            layers.append(nn.utils.spectral_norm)
-
         if use_batch_norm:
-            layers.append(nn.BatchNorm2d(num_features=out_channels))
+            layers.append(torch.nn.BatchNorm2d(num_features=out_channels))
 
-        activation_op = self._activation_layer_helper(activation)
-        if activation_op is not None:
-            layers.append(activation_op)
+        if activation:
+            layers.append(activation)
 
-        self.sequential = nn.Sequential(*layers)
+        self.sequential = torch.nn.Sequential(*layers)
 
-    @staticmethod
-    def _activation_layer_helper(
-        activation_name: str | None = None,
-    ) -> Callable | None:
-        if activation_name is not None:
-            available_activation_names = {'prelu', 'leakyrelu', 'tanh'}
-            activation_name = activation_name.lower()
-            assert activation_name in available_activation_names
-
-        if activation_name == 'prelu':
-            return nn.PReLU()
-        elif activation_name == 'leakyrelu':
-            return nn.LeakyReLU(0.2)
-        elif activation_name == 'tanh':
-            return nn.Tanh()
-
-        return None
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
         """Forward pass.
 
         Args:
-            input (torch.Tensor): Input images.
-                A tensor or size (num_of_images, in_channels, w, h).
+            batch (torch.Tensor): Input images.
+                A tensor or size (batch_size, in_channels, w, h).
 
         Returns:
             torch.Tensor: Output images.
-                A tensor of size (num_of_images, out_channels, w, h)
+                A tensor of size (batch_size, out_channels, w, h)
         """
-        return self.sequential(input)
+        return self.sequential(batch)
 
 
-# reference: https://github.com/usuyama/pytorch-unet
-
-
-class UNetBlock(nn.Module):
+class UNetBlock(torch.nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -224,39 +189,49 @@ class UNetBlock(nn.Module):
         self.use_residual = use_residual
         self.is_reparametrized = False
 
-        self.conv_adapter = nn.Conv2d(
+        self.conv_adapter = torch.nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=1,
             stride=1,
             padding=0,
         )
-        self.conv1 = nn.Conv2d(
+        self.conv1 = torch.nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
             stride=stride,
             padding=kernel_size // 2,
         )
-        self.bn = (
-            nn.BatchNorm2d(num_features=out_channels)
+        self.batch_norm = (
+            torch.nn.BatchNorm2d(num_features=out_channels)
             if use_batch_norm
-            else nn.Identity()
+            else torch.nn.Identity()
         )
-        self.act = nn.ReLU(inplace=True)
+        self.activation = torch.nn.ReLU(inplace=True)
 
-    def forward(self, input):
-        x = self.conv1(input)
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
+        """UNet forward method.
+
+        Args:
+            batch (torch.Tensor): a batch of tensor images.
+
+        Returns:
+            torch.Tensor: a batch of tensor images.
+        """
+        out = self.conv1(batch)
         condition1 = self.use_residual and not self.is_reparametrized
         condition2 = self.in_channels == self.out_channels
         if condition1 and condition2:
-            x += input + self.conv_adapter(input)
-        x = self.bn(x)
-        x = self.act(x)
-        return x
+            out += batch + self.conv_adapter(batch)
+        out = self.batch_norm(out)
+        out = self.activation(out)
+        return out
 
     def reparametrize_convs(self):
-        identity_conv = nn.init.dirac_(torch.empty_like(self.conv1.weight))
+        identity_conv = torch.nn.init.dirac_(
+            torch.empty_like(self.conv1.weight)
+        )
         padded_conv_adapter = F.pad(
             input=self.conv_adapter.weight,
             pad=(1, 1, 1, 1),
@@ -282,7 +257,7 @@ def layer_generator(
     use_residual: bool = True,
     num_blocks: int = 2,
 ):
-    return nn.Sequential(
+    return torch.nn.Sequential(
         *(
             UNetBlock(
                 in_channels=in_channels if block_id == 0 else out_channels,
@@ -295,7 +270,7 @@ def layer_generator(
     )
 
 
-class UNet(nn.Module):
+class UNet(torch.nn.Module):
     def __init__(
         self,
         in_channels: int = 3,
@@ -303,9 +278,11 @@ class UNet(nn.Module):
         num_filters: int = 64,
         use_residual: bool = True,
         use_batch_norm: bool = False,
-        scale_factor: int | None = 2,
+        scale_factor: int = 2,
     ):
-        """U-Net initializer.
+        """U-Net implementation.
+
+        Source: https://github.com/usuyama/pytorch-unet.
 
         Args:
             in_channels (int, optional): Channel dimension of the input.
@@ -321,7 +298,7 @@ class UNet(nn.Module):
                 the input to the final output. Defaults to True.
             use_batch_norm (bool): Flag for batch_normalization. Defaults to
                 False.
-            scale_factor (int | None): Scaling factor. Defaults to 2.
+            scale_factor (int): Scaling factor. Defaults to 2.
         """
         super().__init__()
 
@@ -348,8 +325,8 @@ class UNet(nn.Module):
             use_batch_norm=use_batch_norm,
         )
 
-        self.maxpool = nn.MaxPool2d(2)
-        self.upsample = nn.Upsample(scale_factor=2.0, mode='bilinear')
+        self.maxpool = torch.nn.MaxPool2d(2)
+        self.upsample = torch.nn.Upsample(scale_factor=2.0, mode='bilinear')
 
         self.dconv_up3 = layer_generator(
             num_filters * 8 + num_filters * 4,
@@ -367,27 +344,27 @@ class UNet(nn.Module):
             use_batch_norm=False,
         )
 
-        self.to_rgb = nn.Conv2d(num_filters, 3, kernel_size=1)
+        self.to_rgb = torch.nn.Conv2d(num_filters, 3, kernel_size=1)
 
         if self.scale_factor is not None:
-            self.conv_last = nn.Conv2d(
+            self.conv_last = torch.nn.Conv2d(
                 in_channels=num_filters,
                 out_channels=(self.scale_factor**2) * out_channels,
                 kernel_size=1,
                 padding=0,
             )
-            self.pixel_shuffle = nn.PixelShuffle(self.scale_factor)
+            self.pixel_shuffle = torch.nn.PixelShuffle(self.scale_factor)
 
         else:
-            self.conv_last = nn.Conv2d(
+            self.conv_last = torch.nn.Conv2d(
                 num_filters, out_channels, kernel_size=1
             )
-            # self.downsample = nn.Upsample(
+            # self.downsample = torch.nn.Upsample(
             #     scale_factor=1 / self.scale_factor,
             #     mode='bicubic',
             #     align_corners=True
             # )
-        # self.downsample = nn.Identity()
+        # self.downsample = torch.nn.Identity()
 
         self.layers = [
             self.dconv_down1,
@@ -399,8 +376,9 @@ class UNet(nn.Module):
             self.dconv_up1,
         ]
 
-    def forward(self, input):
-        x = input
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
+        """UNet forward method."""
+        x = batch
 
         conv1 = self.dconv_down1(x)
         x = self.maxpool(conv1)
@@ -428,12 +406,12 @@ class UNet(nn.Module):
 
         x = self.conv_last(x)
 
-        if self.scale_factor is not None:
+        if self.scale_factor > 1:
             x = self.pixel_shuffle(x)
 
         if self.use_residual:
             x += F.interpolate(
-                input[:, -self.out_channels :, :, :],  # RGB -> BGR
+                batch[:, -self.out_channels :, :, :],  # RGB -> BGR
                 scale_factor=float(self.scale_factor),
                 mode='bicubic',
             )
@@ -447,27 +425,27 @@ class UNet(nn.Module):
                     block.reparametrize_convs()
 
 
-class SRUNet(nn.Module):
+class SRUNet(torch.nn.Module):
     def __init__(
         self,
         in_dim=3,
-        n_class=3,
+        num_class=3,
         downsample=None,
         residual=False,
         batchnorm=False,
         scale_factor=2,
-        n_filters=64,
+        num_filters=64,
         layer_multiplier=1,
     ):
         """
         Args:
             in_dim (float, optional):
                 channel dimension of the input
-            n_class (str):
+            num_class (str):
                 channel dimension of the output
-            n_filters (int, optional):
-                maximum number of filters. the layers start with n_filters / 2,  after each layer this number gets multiplied by 2
-                 during the encoding stage and until it reaches n_filters. During the decoding stage the number follows the reverse
+            num_filters (int, optional):
+                maximum number of filters. the layers start with num_filters / 2,  after each layer this number gets multiplied by 2
+                 during the encoding stage and until it reaches num_filters. During the decoding stage the number follows the reverse
                  scheme. Default is 64
             downsample (None or float, optional)
                 can be used for downscaling the output. e.g., if you use downsample=0.5 the output resolution will be halved
@@ -486,60 +464,60 @@ class SRUNet(nn.Module):
         super().__init__()
 
         self.residual = residual
-        self.n_class = n_class
+        self.num_class = num_class
         self.scale_factor = scale_factor
 
         self.dconv_down1 = layer_generator(
             in_dim,
-            n_filters // 2,
+            num_filters // 2,
             use_batch_norm=False,
-            n_blocks=2 * layer_multiplier,
+            num_blocks=2 * layer_multiplier,
         )
         self.dconv_down2 = layer_generator(
-            n_filters // 2,
-            n_filters,
+            num_filters // 2,
+            num_filters,
             use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
+            num_blocks=3 * layer_multiplier,
         )
         self.dconv_down3 = layer_generator(
-            n_filters,
-            n_filters,
+            num_filters,
+            num_filters,
             use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
+            num_blocks=3 * layer_multiplier,
         )
         self.dconv_down4 = layer_generator(
-            n_filters,
-            n_filters,
+            num_filters,
+            num_filters,
             use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
+            num_blocks=3 * layer_multiplier,
         )
 
-        self.maxpool = nn.MaxPool2d(2)
+        self.maxpool = torch.nn.MaxPool2d(2)
         if downsample is not None and downsample != 1.0:
-            self.downsample = nn.Upsample(
+            self.downsample = torch.nn.Upsample(
                 scale_factor=downsample, mode='bicubic', align_corners=True
             )
         else:
-            self.downsample = nn.Identity()
-        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
+            self.downsample = torch.nn.Identity()
+        self.upsample = torch.nn.Upsample(scale_factor=2, mode='bilinear')
 
         self.dconv_up3 = layer_generator(
-            n_filters + n_filters,
-            n_filters,
+            num_filters + num_filters,
+            num_filters,
             use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
+            num_blocks=3 * layer_multiplier,
         )
         self.dconv_up2 = layer_generator(
-            n_filters + n_filters,
-            n_filters,
+            num_filters + num_filters,
+            num_filters,
             use_batch_norm=batchnorm,
-            n_blocks=3 * layer_multiplier,
+            num_blocks=3 * layer_multiplier,
         )
         self.dconv_up1 = layer_generator(
-            n_filters + n_filters // 2,
-            n_filters // 2,
+            num_filters + num_filters // 2,
+            num_filters // 2,
             use_batch_norm=False,
-            n_blocks=3 * layer_multiplier,
+            num_blocks=3 * layer_multiplier,
         )
 
         self.layers = [
@@ -554,14 +532,19 @@ class SRUNet(nn.Module):
 
         sf = self.scale_factor
 
-        self.to_rgb = nn.Conv2d(n_filters // 2, 3, kernel_size=1)
+        self.to_rgb = torch.nn.Conv2d(num_filters // 2, 3, kernel_size=1)
         if sf > 1:
-            self.conv_last = nn.Conv2d(
-                n_filters // 2, (sf**2) * n_class, kernel_size=1, padding=0
+            self.conv_last = torch.nn.Conv2d(
+                num_filters // 2,
+                (sf**2) * num_class,
+                kernel_size=1,
+                padding=0,
             )
-            self.pixel_shuffle = nn.PixelShuffle(sf)
+            self.pixel_shuffle = torch.nn.PixelShuffle(sf)
         else:
-            self.conv_last = nn.Conv2d(n_filters // 2, 3, kernel_size=1)
+            self.conv_last = torch.nn.Conv2d(
+                num_filters // 2, 3, kernel_size=1
+            )
 
     def forward(self, input):
         x = input
@@ -602,8 +585,8 @@ class SRUNet(nn.Module):
             sf = (
                 self.scale_factor
             )  # (self.scale_factor // (2 if self.use_s2d and self.scale_factor > 1 else 1))
-            x += nn.functional.interpolate(
-                input[:, -self.n_class :, :, :],
+            x += torch.nn.functional.interpolate(
+                input[:, -self.num_class :, :, :],
                 scale_factor=sf,
                 mode='bicubic',
             )
@@ -620,44 +603,44 @@ class SRUNet(nn.Module):
                     block.reparametrize_convs()
 
 
-# def sr_espcn(n_filters, scale_factor=2, out_channels=3, kernel_size=1):
-#     return nn.Sequential(
+# def sr_espcn(num_filters, scale_factor=2, out_channels=3, kernel_size=1):
+#     return torch.nn.Sequential(
 #         *(
-#             nn.Conv2d(
+#             torch.nn.Conv2d(
 #                 kernel_size=kernel_size,
-#                 in_channels=n_filters,
+#                 in_channels=num_filters,
 #                 out_channels=(scale_factor**2) * out_channels,
 #                 padding=kernel_size // 2,
 #             ),
-#             nn.PixelShuffle(scale_factor),
+#             torch.nn.PixelShuffle(scale_factor),
 #         )
 #     )
 
 
-# class SimpleResNet(nn.Module):
-#     def __init__(self, n_filters, n_blocks):
+# class SimpleResNet(torch.nn.Module):
+#     def __init__(self, num_filters, num_blocks):
 #         super().__init__()
 #         self.conv1 = UNetBlock(
 #             in_channels=3,
-#             out_channels=n_filters,
+#             out_channels=num_filters,
 #             use_residual=True,
 #             use_batch_norm=False,
 #         )
 #         convblock = [
 #             UNetBlock(
-#                 in_channels=n_filters,
-#                 out_channels=n_filters,
+#                 in_channels=num_filters,
+#                 out_channels=num_filters,
 #                 use_residual=True,
 #                 use_batch_norm=False,
 #             )
-#             for _ in range(n_blocks - 1)
+#             for _ in range(num_blocks - 1)
 #         ]
-#         self.convblocks = nn.Sequential(*convblock)
-#         self.sr = sr_espcn(n_filters, scale_factor=2, out_channels=3)
-#         self.upscale = nn.Upsample(
+#         self.convblocks = torch.nn.Sequential(*convblock)
+#         self.sr = sr_espcn(num_filters, scale_factor=2, out_channels=3)
+#         self.upscale = torch.nn.Upsample(
 #             scale_factor=2, mode='bicubic', align_corners=True
 #         )
-#         self.clip = nn.Hardtanh()
+#         self.clip = torch.nn.Hardtanh()
 
 #     def forward(self, input):
 #         x = self.conv1(input)

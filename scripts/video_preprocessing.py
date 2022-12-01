@@ -1,14 +1,17 @@
+"""Utilities for compressing and frame splitting a video."""
+
+from __future__ import annotations
+
 import argparse
 import shutil
 import subprocess
 import warnings
 from pathlib import Path
-from typing import Tuple, Union
 
 
 def compress(
-    input_fn: Union[Path, str],
-    output_fn: Union[Path, str],
+    input_fn: Path | str,
+    output_fn: Path | str,
     crf: int = 23,
     scale_factor: int = 4,
 ):
@@ -60,8 +63,8 @@ def compress(
 
 
 def video_to_frames(
-    input_fn: Union[Path, str],
-    output_dir: Union[Path, str],
+    input_fn: Path | str,
+    output_dir: Path | str,
 ):
     """Splits a video into .jpg frames.
 
@@ -86,33 +89,28 @@ def video_to_frames(
     subprocess.run(cmd, check=True)
 
 
-def all_files_have_the_same_extension(folder: Union[Path, str]) -> bool:
-    """Returns True if all the files in `folder` have the same extension."""
-    folder = Path(folder)
-    files = list(x for x in folder.iterdir() if not x.is_dir())
-    return len(files) == 0 or len(set(x.suffix for x in files)) == 1
-
-
-def assert_same_extension_among_files(
-    folder: Union[Path, str]
-) -> Union[bool, Exception]:
-    """Returns True if all the files in `folder` have the same extension,
-    otherwise raise an exception.
-    """
-    folder = Path(folder)
-    if all_files_have_the_same_extension(folder):
+def files_have_same_ext(
+    input_dir: Path | str, enable_assert: bool = False
+) -> bool | Exception:
+    """Returns True if all the files in `input_dir` have the same extension."""
+    input_dir = Path(input_dir)
+    files = list(x for x in input_dir.iterdir() if not x.is_dir())
+    ans = len(files) == 0 or len(set(x.suffix for x in files)) == 1
+    if not enable_assert:
+        return ans
+    if ans:
         return True
     raise Exception(
-        f'All files in "{folder.absolute().as_posix()}" must have the'
+        f'All files in "{input_dir.absolute().as_posix()}" must have the'
         ' same extension.'
     )
 
 
 def prepare_original_videos_dir(
-    input_dir: Union[Path, str],
+    input_dir: Path | str,
     original_videos_namedir: str = 'original_videos',
 ) -> Path:
-    """Asserts a standard directory structure for original videos."""
+    """Ensures a standard directory structure for original videos."""
     original_videos_namedir = 'original_videos'
     input_dir = Path(input_dir)
 
@@ -122,9 +120,7 @@ def prepare_original_videos_dir(
 
     if case11:
         original_videos_dir = input_dir / original_videos_namedir
-        # assert_same_extension_among_files(original_videos_dir)
     elif case1:
-        # assert_same_extension_among_files(input_dir)
         (original_videos_dir := input_dir / original_videos_namedir).mkdir()
         # mv <input_dir>/* -t <input_dir>/<original_videos_namedir>/
         for video_fp in input_dir.iterdir():
@@ -133,7 +129,6 @@ def prepare_original_videos_dir(
                     video_fp.as_posix(), original_videos_dir.as_posix()
                 )
     elif case2:
-        # assert_same_extension_among_files(input_dir)
         original_videos_dir = input_dir
         if not len(list(original_videos_dir.parent.iterdir())) == 1:
             raise Exception(
@@ -145,9 +140,9 @@ def prepare_original_videos_dir(
 
 
 def prepare_directories(
-    input_dir: Union[Path, str],
+    input_dir: Path | str,
     original_videos_namedir: str = 'original_videos',
-) -> Tuple[Path, Path, Path, Path]:
+) -> tuple[Path, ...]:
     """Asserts a standard dir structure for original/compressed videos/frames."""
     original_dir = prepare_original_videos_dir(
         input_dir=input_dir, original_videos_namedir=original_videos_namedir
@@ -170,13 +165,18 @@ def prepare_directories(
     )
 
 
-def main():
+def arg_parse() -> argparse.Namespace:
+    """Parses input arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input_dir', type=str, default='.')
     parser.add_argument('-s', '--scale_factor', type=int, default=4)
-    args = parser.parse_args()
-    input_dir = Path(args.input_dir)
+    return parser.parse_args()
 
+
+def main():
+    """Main routine for video preprocessing."""
+    args = arg_parse()
+    input_dir = Path(args.input_dir)
     (
         original_dir,
         compressed_videos_dir,
