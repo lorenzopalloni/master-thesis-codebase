@@ -9,20 +9,25 @@
     6. pip install --upgrade av==8.1.0
     7. cd ./vision && python3.8 setup.py install
 
-> resume with: `ssh solaris && screen -r binarization`
+> resume from `binarization/models/UNet`
 > current branch: `train_srunet`
+
+> [standby] resume with: `ssh solaris && screen -r binarization`
 
 ## high priority
 
-- implement `eval_video.py` (video + timing) while UNet is training
-- train SR-UNet
+- refactor UNet
+- refactor `binarization/models/common.py`
+- refactor SRUNet
 
-- evaluate with `eval_image.py` and trained weights both models
-- evaluate with `eval_video.py` and trained weights both models
+- train SRUNet
+
+- evaluate with `eval_image.py` both models
+- evaluate with `eval_video.py` both models
 - implement binarized UNet
 - train binarized UNet
-- implement binarized SR-UNet
-- train binarized SR-UNet
+- implement binarized SRUNet
+- train binarized SRUNet
 - evaluate them all
 
 - train with/without ssim
@@ -78,7 +83,7 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
     especially why the latter doesn't handle input values < 0, while the
     former can.
 - DONE - do some experimentation with the UNet
-- DONE - study SR-UNet
+- DONE - study SRUNet
 - DONE - set up [Hydra Structured Config](https://hydra.cc/docs/advanced/terminology/#structured-config)
 - DONE - log more info while training
 - DONE - solve GPU issue in Ubuntu 20.04 (Alienware)
@@ -108,3 +113,4 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - symbolic link `ln -s ./data/original_videos` -> `/homes/datasets/BVI_DVC/3h<...>/Videos/`
 - DONE - run `./scripts/video_preprocessing.py -i data -s 4`
 - DONE - train UNet with `scale_factor == 4`
+- DONE - implement `eval_video.py` (video + timing) while UNet is training

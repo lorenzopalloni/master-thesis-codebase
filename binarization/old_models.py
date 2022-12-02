@@ -1,3 +1,4 @@
+# pylint: disable=duplicate-code
 """Super-resolution model implementations"""
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ class Discriminator(torch.nn.Module):
     ):
         """A series of convolutional blocks.
 
-        The first, third, fifth (and so on) convolutional blocks increase
-        the number of channels but retain image size.
+        The first, third, fifth (and so on) convolutional blocks increase the
+        number of channels but retain image size.
         The second, fourth, sixth (and so on) convolutional blocks retain the
         same number of output channels, but halve image size.
         The first convolutional block is unique because it does not use batch
@@ -51,7 +52,7 @@ class Discriminator(torch.nn.Module):
         all_out_channels = [input_num_channels]
         for i in range(num_blocks):
             in_channels = all_out_channels[-1]
-            out_channels = self.out_channels_helper(
+            out_channels = self.compute_out_channels(
                 i=i, default=all_out_channels[-1], init=num_channels
             )
             all_out_channels.append(out_channels)
@@ -78,7 +79,7 @@ class Discriminator(torch.nn.Module):
         )
 
     @staticmethod
-    def out_channels_helper(i: int, default: int, init: int) -> int:
+    def compute_out_channels(i: int, default: int, init: int) -> int:
         """Computes num of output channels for each ConvBlock."""
         if i == 0:
             return init
@@ -86,23 +87,19 @@ class Discriminator(torch.nn.Module):
             return default * 2
         return default
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Forward pass.
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
+        """Discriminator forward method.
 
         Args:
-            inputs (torch.Tensor): High-resolution or super-resolution
-                images. A tensor of size (
-                    num_of_images,
-                    input_num_channels,
-                    w * scaling_factor,
-                    h * scaling_factor
-                )
+            batch (torch.Tensor): High-resolution or super-resolution
+                images. A tensor of size (num_images, num_channels,
+                w * scale_factor, h * scale_factor).
 
         Returns:
             torch.Tensor: Expected probability for each given image to
-            be a high-resolution image. A tensor of size (num_of_images, 1).
+            be a high-resolution image. A tensor of size (num_images, 1).
         """
-        return self.sequential(inputs)
+        return self.sequential(batch)
 
 
 class ConvBlock(torch.nn.Module):

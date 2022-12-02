@@ -7,8 +7,8 @@ from pathlib import Path
 
 import torch
 
-from binarization import models
 from binarization.config import Gifnoc
+from binarization.models import SRUNet, UNet
 
 
 def set_up_cuda_device(device_id: int = 1, verbose: bool = False) -> str:
@@ -46,18 +46,18 @@ def set_up_checkpoints_dir(artifacts_dir: Path) -> Path:
     return checkpoints_dir
 
 
-def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> models.UNet | models.SRUNet:
-    """Instantiates a UNet or a SR-UNet, resuming model weights if provided"""
+def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> UNet | SRUNet:
+    """Instantiates a UNet or a SRUNet, resuming model weights if provided"""
     if cfg.model.name == 'unet':
-        generator = models.UNet(
+        generator = UNet(
             num_filters=cfg.model.num_filters,
             use_residual=cfg.model.use_residual,
             use_batch_norm=cfg.model.use_batch_norm,
             scale_factor=cfg.params.scale_factor,
         )
     elif cfg.model.name == 'srunet':
-        raise NotImplementedError("[WIP] SR-UNet not implementated.")
-        # generator = models.SRUNet(
+        raise NotImplementedError("[WIP] SRUNet not implementated.")
+        # generator = SRUNet(
         #     num_filters=cfg.model.num_filters,
         #     use_residual=cfg.model.use_residual,
         #     use_batch_norm=cfg.model.use_batch_norm,
@@ -70,14 +70,16 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> models.UNet | m
     if cfg.model.ckpt_path_to_resume:
         print(f'>>> Resuming from {cfg.model.ckpt_path_to_resume}')
         generator.load_state_dict(
-            torch.load(cfg.model.ckpt_path_to_resume.as_posix(), map_location=device)
+            torch.load(
+                cfg.model.ckpt_path_to_resume.as_posix(), map_location=device
+            )
         )
     return generator
 
 
-# def set_up_srunet(cfg: Gifnoc) -> models.SRUNet:
+# def set_up_srunet(cfg: Gifnoc) -> SRUNet:
 #     """Instantiates a UNet, resuming model weights if provided"""
-#     generator = models.SRUNet(
+#     generator = SRUNet(
 #         num_filters=cfg.model.num_filters,
 #         use_residual=cfg.model.use_residual,
 #         use_batch_norm=cfg.model.use_batch_norm,

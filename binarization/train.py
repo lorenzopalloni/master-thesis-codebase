@@ -10,9 +10,9 @@ import piq
 import torch
 from tqdm import tqdm
 
-from binarization import models
 from binarization.config import Gifnoc, get_default_config
 from binarization.dataset import get_train_batches, get_val_batches
+from binarization.models import Discriminator
 from binarization.traintools import (
     set_up_checkpoints_dir,
     set_up_cuda_device,
@@ -22,14 +22,14 @@ from binarization.vaccaro import pytorch_ssim
 
 
 def run_training(cfg: Gifnoc):
-    """Main function to train a super-resolution model"""
+    """Launches a super-resolution model training."""
 
     checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
 
     device = set_up_cuda_device(device_id=1, verbose=True)
 
     gen = set_up_generator(cfg=cfg, device=device)
-    dis = models.Discriminator()
+    dis = Discriminator()
     dis.to(device)
 
     gen_optim = torch.optim.Adam(lr=cfg.params.gen_lr, params=gen.parameters())
@@ -205,7 +205,7 @@ def run_experiment_with_unet(cfg: Gifnoc):
 
 
 def run_experiment_with_srunet(cfg: Gifnoc):
-    """Launches an mlflow experiment with a SR-UNet."""
+    """Launches an mlflow experiment with a SRUNet."""
 
     cfg.model.name = 'srunet'
     # cfg.model.ckpt_path_to_resume = Path(cfg.paths.artifacts_dir, '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth')
@@ -214,7 +214,7 @@ def run_experiment_with_srunet(cfg: Gifnoc):
     experiment = mlflow.set_experiment('SRUNet_training')
     with mlflow.start_run(
         experiment_id=experiment.experiment_id,
-        description="Running SR-UNet training",
+        description="Running SRUNet training",
     ):
         mlflow.log_params(cfg.params.stringify())
         mlflow.log_params(cfg.model.stringify())
