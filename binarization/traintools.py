@@ -55,12 +55,11 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> UNet | SRUNet:
             scale_factor=cfg.params.scale_factor,
         )
     elif cfg.model.name == 'srunet':
-        raise NotImplementedError("[WIP] SRUNet not implementated.")
-        # generator = SRUNet(
-        #     num_filters=cfg.model.num_filters,
-        #     use_batch_norm=cfg.model.use_batch_norm,
-        #     scale_factor=cfg.params.scale_factor
-        # )
+        generator = SRUNet(
+            num_filters=cfg.model.num_filters,
+            use_batch_norm=cfg.model.use_batch_norm,
+            scale_factor=cfg.params.scale_factor,
+        )
     else:
         raise ValueError(f"`{cfg.model.name=}`, choose in {'unet', 'srunet'}.")
 
