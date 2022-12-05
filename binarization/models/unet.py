@@ -30,18 +30,18 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         """U-Net.
 
         Args:
-            in_channels (int, optional): Channel dimension of the input.
+            in_channels (int, optional): channel dimension of the input.
                 Defaults to 3.
-            out_channels (int, optional): Channel dimension of the output.
+            out_channels (int, optional): channel dimension of the output.
                 Defaults to 3.
-            num_filters (int, optional): Number of filters in the first hidden
+            num_filters (int, optional): number of filters in the first hidden
                 layer. Each of the following layers gets twice the number of
                 filters of its previous layer during encoding phase, and half
                 the number of filters of its previous layer during decoding
                 phase. Defaults to 64.
-            use_batch_norm (bool): Flag for batch normalization. Defaults to
+            use_batch_norm (bool): flag for batch normalization. Defaults to
                 False.
-            scale_factor (int): Scaling factor. Defaults to 4.
+            scale_factor (int): scaling factor. Defaults to 4.
         """
         assert scale_factor == int(scale_factor) and scale_factor > 1
 
