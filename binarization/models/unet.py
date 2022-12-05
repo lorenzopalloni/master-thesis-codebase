@@ -75,18 +75,18 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         self.upsample = torch.nn.Upsample(scale_factor=2.0, mode='bilinear')
 
         self.up4 = generate_unet_block_sequence(
-            num_filters * 8 + num_filters * 4,
-            num_filters * 4,
+            in_channels=num_filters * 8 + num_filters * 4,
+            out_channels=num_filters * 4,
             use_batch_norm=use_batch_norm,
         )
         self.up3 = generate_unet_block_sequence(
-            num_filters * 4 + num_filters * 2,
-            num_filters * 2,
+            in_channels=num_filters * 4 + num_filters * 2,
+            out_channels=num_filters * 2,
             use_batch_norm=use_batch_norm,
         )
         self.up2 = generate_unet_block_sequence(
-            num_filters * 2 + num_filters,
-            num_filters,
+            in_channels=num_filters * 2 + num_filters,
+            out_channels=num_filters,
             use_batch_norm=False,
         )
         self.up1 = torch.nn.Conv2d(
@@ -96,16 +96,6 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
             padding=0,
         )
         self.pixel_shuffle = torch.nn.PixelShuffle(self.scale_factor)
-
-        self.reparametrizable_layers = [
-            self.down1,
-            self.down2,
-            self.down3,
-            self.down4,
-            self.up4,
-            self.up3,
-            self.up2,
-        ]
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
         """UNet forward method."""
