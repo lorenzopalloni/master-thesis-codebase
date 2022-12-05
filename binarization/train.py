@@ -186,40 +186,33 @@ def run_training(cfg: Gifnoc):
         # training_epoch_end - END
     mlflow.log_artifacts(checkpoints_dir)
 
+def run_experiment(
+    cfg: Gifnoc,
+    model_name: str,
+    experiment_name: str,
+    ckpt_path_to_resume: Path | None = None,
+) -> None:
+    """Launches an mlflow experiment.
 
-def run_experiment_with_unet(cfg: Gifnoc):
-    """Launches an mlflow experiment with a standard UNet."""
-
-    cfg.model.name = 'unet'
-    # cfg.model.ckpt_path_to_resume = Path(cfg.paths.artifacts_dir, '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth')
+    Args:
+        cfg (Gifnoc): a valid configuration object.
+        model_name (str): choose in ('unet', 'srunet').
+        experiment_name (str): name of the mlflow experiment.
+        ckpt_path_to_resume (Path | None, optional): path to model weights.
+            Defaults to None.
+    """
+    cfg.model.name = model_name
+    cfg.model.ckpt_path_to_resume = ckpt_path_to_resume
 
     mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
-    experiment = mlflow.set_experiment('UNet_training')
+    experiment = mlflow.set_experiment(experiment_name)
     with mlflow.start_run(
         experiment_id=experiment.experiment_id,
-        description="Running UNet training",
+        description=f"Running {experiment_name}",
     ):
         mlflow.log_params(cfg.params.stringify())
         mlflow.log_params(cfg.model.stringify())
         run_training(cfg)
-
-
-def run_experiment_with_srunet(cfg: Gifnoc):
-    """Launches an mlflow experiment with a SRUNet."""
-
-    cfg.model.name = 'srunet'
-    # cfg.model.ckpt_path_to_resume = Path(cfg.paths.artifacts_dir, '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth')
-
-    mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
-    experiment = mlflow.set_experiment('SRUNet_training')
-    with mlflow.start_run(
-        experiment_id=experiment.experiment_id,
-        description="Running SRUNet training",
-    ):
-        mlflow.log_params(cfg.params.stringify())
-        mlflow.log_params(cfg.model.stringify())
-        run_training(cfg)
-
 
 if __name__ == "__main__":
     default_cfg = get_default_config()
@@ -227,4 +220,23 @@ if __name__ == "__main__":
     # default_cfg.params.limit_val_batches = 2
     # default_cfg.params.num_epochs = 2
 
-    run_experiment_with_unet(default_cfg)
+    unet_ckpt = Path(
+        default_cfg.paths.artifacts_dir,
+        '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth'
+    )
+    # srunet_ckpt = Path(cfg.paths.artifacts_dir, '/checkpoints/')
+
+    # run_experiment(
+    #     cfg=default_cfg,
+    #     model_name='unet',
+    #     experiment_name='UNet experiment',
+    #     ckpt_path_to_resume=unet_ckpt,
+    # )
+
+    run_experiment(
+        cfg=default_cfg,
+        model_name='srunet',
+        experiment_name='SRUNet experiment',
+        # ckpt_path_to_resume=srunet_ckpt,
+    )
+
