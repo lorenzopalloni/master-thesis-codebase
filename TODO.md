@@ -1,14 +1,5 @@
 # TODO List
 
-> compile torchvision with ffmpeg support:
-    1. git clone git@github.com:pytorch/vision.git
-    2. sudo apt install ffmpeg
-    3. sudo apt install libavcodec-dev
-    4. sudo apt install libavfilter-dev
-    5. sudo apt install libswscale-dev
-    6. pip install --upgrade av==8.1.0
-    7. cd ./vision && python3.8 setup.py install
-
 > resume from `binarization/models/UNet`
 > current branch: `train_srunet`
 
@@ -42,14 +33,24 @@
 ---
 
 ## low priority
-- pay attention in piq: LPIPS seems to yield different results than in the
+- take a look in piq: LPIPS seems to yield different results than in the
     original implementation
 
 ---
+### How to compile torchvision with ffmpeg support:
+    1. git clone git@github.com:pytorch/vision.git
+    2. sudo apt install ffmpeg
+    3. sudo apt install libavcodec-dev
+    4. sudo apt install libavfilter-dev
+    5. sudo apt install libswscale-dev
+    6. pip install --upgrade av==8.1.0
+    7. cd ./vision && python3.8 setup.py install
+
+### BVI-DVC alternative
 An alternative to the official BVI-DVC dataset can be found at [https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
 Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences, and this alternative contains only 772 sequences, and it is 83.8GB big.
 
-## Videos from [Derf's collection](https://media.xiph.org/video/derf/) used by Vaccaro in his paper as an extra test dataset:
+### Videos from [Derf's collection](https://media.xiph.org/video/derf/) used by Vaccaro in his paper as an extra test dataset:
 + -> downloaded on Alienware-M15
 - -> not yet downloaded on Alienware-M15
     + `ducks_take_off`
@@ -67,7 +68,7 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
     + `in_to_tree`
     + `sunflower`
 
-#### DONEs
+## DONEs
 - DONE - .gitignore literature/ folder, plus Python and LaTex stuff
 - DONE - convert sh script for video preparation to Python
 - DONE - implement a custom pytorch dataset

@@ -51,7 +51,6 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> UNet | SRUNet:
     if cfg.model.name == 'unet':
         generator = UNet(
             num_filters=cfg.model.num_filters,
-            use_residual=cfg.model.use_residual,
             use_batch_norm=cfg.model.use_batch_norm,
             scale_factor=cfg.params.scale_factor,
         )
@@ -59,7 +58,6 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> UNet | SRUNet:
         raise NotImplementedError("[WIP] SRUNet not implementated.")
         # generator = SRUNet(
         #     num_filters=cfg.model.num_filters,
-        #     use_residual=cfg.model.use_residual,
         #     use_batch_norm=cfg.model.use_batch_norm,
         #     scale_factor=cfg.params.scale_factor
         # )
@@ -81,7 +79,6 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> UNet | SRUNet:
 #     """Instantiates a UNet, resuming model weights if provided"""
 #     generator = SRUNet(
 #         num_filters=cfg.model.num_filters,
-#         use_residual=cfg.model.use_residual,
 #         use_batch_norm=cfg.model.use_batch_norm,
 #         scale_factor=cfg.params.scale_factor
 #     )

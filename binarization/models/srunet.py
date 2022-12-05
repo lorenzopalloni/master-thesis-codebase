@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import torch
 
-from binarization.models.common import layer_generator
+from binarization.models.common import generate_unet_block_sequence
 
 
 class SRUNet(torch.nn.Module):
-    """SRUNet (Super-Resolution UNet)"""
+    """SRUNet (Super-Resolution UNet)."""
 
     def __init__(
         self,
@@ -51,25 +51,25 @@ class SRUNet(torch.nn.Module):
         self.num_class = num_class
         self.scale_factor = scale_factor
 
-        self.dconv_down1 = layer_generator(
+        self.dconv_down1 = generate_unet_block_sequence(
             in_dim,
             num_filters // 2,
             use_batch_norm=False,
             num_blocks=2 * layer_multiplier,
         )
-        self.dconv_down2 = layer_generator(
+        self.dconv_down2 = generate_unet_block_sequence(
             num_filters // 2,
             num_filters,
             use_batch_norm=batchnorm,
             num_blocks=3 * layer_multiplier,
         )
-        self.dconv_down3 = layer_generator(
+        self.dconv_down3 = generate_unet_block_sequence(
             num_filters,
             num_filters,
             use_batch_norm=batchnorm,
             num_blocks=3 * layer_multiplier,
         )
-        self.dconv_down4 = layer_generator(
+        self.dconv_down4 = generate_unet_block_sequence(
             num_filters,
             num_filters,
             use_batch_norm=batchnorm,
@@ -85,19 +85,19 @@ class SRUNet(torch.nn.Module):
             self.downsample = torch.nn.Identity()
         self.upsample = torch.nn.Upsample(scale_factor=2, mode='bilinear')
 
-        self.dconv_up3 = layer_generator(
+        self.dconv_up3 = generate_unet_block_sequence(
             num_filters + num_filters,
             num_filters,
             use_batch_norm=batchnorm,
             num_blocks=3 * layer_multiplier,
         )
-        self.dconv_up2 = layer_generator(
+        self.dconv_up2 = generate_unet_block_sequence(
             num_filters + num_filters,
             num_filters,
             use_batch_norm=batchnorm,
             num_blocks=3 * layer_multiplier,
         )
-        self.dconv_up1 = layer_generator(
+        self.dconv_up1 = generate_unet_block_sequence(
             num_filters + num_filters // 2,
             num_filters // 2,
             use_batch_norm=False,

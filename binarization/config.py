@@ -13,7 +13,6 @@ from gifnoc import Gifnoc
 class ModelConfig:
     name: str | None = None  # {'unet', 'srunet'}
     num_filters: int = 64
-    use_residual: bool = True
     use_batch_norm: bool = False
     ckpt_path_to_resume: Path | None = None
 

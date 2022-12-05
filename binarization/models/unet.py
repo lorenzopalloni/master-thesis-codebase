@@ -5,13 +5,18 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
-from binarization.models.common import layer_generator
+from binarization.models.common import generate_unet_block_sequence
 
 
 class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
-    """U-Net implementation.
+    """U-Net for super-resolution.
 
-    Source: https://github.com/usuyama/pytorch-unet.
+    Some references:
+        Implementation based on:
+            - https://github.com/usuyama/pytorch-unet
+            - https://github.com/fede-vaccaro/fast-sr-unet
+
+        PixelShuffle: https://arxiv.org/abs/1609.05158.
     """
 
     def __init__(
@@ -19,13 +24,10 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         in_channels: int = 3,
         out_channels: int = 3,
         num_filters: int = 64,
-        use_residual: bool = True,
         use_batch_norm: bool = False,
         scale_factor: int = 4,
     ):
-        """U-Net implementation.
-
-        Source: https://github.com/usuyama/pytorch-unet.
+        """U-Net.
 
         Args:
             in_channels (int, optional): Channel dimension of the input.
@@ -37,9 +39,7 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
                 filters of its previous layer during encoding phase, and half
                 the number of filters of its previous layer during decoding
                 phase. Defaults to 64.
-            use_residual (bool): Flag for residual scheme, that concatenates
-                the input to the final output. Defaults to True.
-            use_batch_norm (bool): Flag for batch_normalization. Defaults to
+            use_batch_norm (bool): Flag for batch normalization. Defaults to
                 False.
             scale_factor (int): Scaling factor. Defaults to 4.
         """
@@ -47,49 +47,49 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
 
         super().__init__()
 
-        self.use_residual = use_residual
         self.out_channels = out_channels
         self.scale_factor = scale_factor
 
-        self.dconv_down1 = layer_generator(
-            in_channels, num_filters, use_batch_norm=False
+        self.down1 = generate_unet_block_sequence(
+            in_channels=in_channels,
+            out_channels=num_filters,
+            use_batch_norm=False,
         )
-        self.dconv_down2 = layer_generator(
-            num_filters,
-            num_filters * 2,
+        self.down2 = generate_unet_block_sequence(
+            in_channels=num_filters,
+            out_channels=num_filters * 2,
             use_batch_norm=use_batch_norm,
         )
-        self.dconv_down3 = layer_generator(
-            num_filters * 2,
-            num_filters * 4,
+        self.down3 = generate_unet_block_sequence(
+            in_channels=num_filters * 2,
+            out_channels=num_filters * 4,
             use_batch_norm=use_batch_norm,
         )
-        self.dconv_down4 = layer_generator(
-            num_filters * 4,
-            num_filters * 8,
+        self.down4 = generate_unet_block_sequence(
+            in_channels=num_filters * 4,
+            out_channels=num_filters * 8,
             use_batch_norm=use_batch_norm,
         )
 
         self.maxpool = torch.nn.MaxPool2d(2)
         self.upsample = torch.nn.Upsample(scale_factor=2.0, mode='bilinear')
 
-        self.dconv_up3 = layer_generator(
+        self.up4 = generate_unet_block_sequence(
             num_filters * 8 + num_filters * 4,
             num_filters * 4,
             use_batch_norm=use_batch_norm,
         )
-        self.dconv_up2 = layer_generator(
+        self.up3 = generate_unet_block_sequence(
             num_filters * 4 + num_filters * 2,
             num_filters * 2,
             use_batch_norm=use_batch_norm,
         )
-        self.dconv_up1 = layer_generator(
+        self.up2 = generate_unet_block_sequence(
             num_filters * 2 + num_filters,
             num_filters,
             use_batch_norm=False,
         )
-
-        self.conv_last = torch.nn.Conv2d(
+        self.up1 = torch.nn.Conv2d(
             in_channels=num_filters,
             out_channels=(self.scale_factor**2) * out_channels,
             kernel_size=1,
@@ -97,59 +97,52 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         )
         self.pixel_shuffle = torch.nn.PixelShuffle(self.scale_factor)
 
-        self.layers = [
-            self.dconv_down1,
-            self.dconv_down2,
-            self.dconv_down3,
-            self.dconv_down4,
-            self.dconv_up3,
-            self.dconv_up2,
-            self.dconv_up1,
+        self.reparametrizable_layers = [
+            self.down1,
+            self.down2,
+            self.down3,
+            self.down4,
+            self.up4,
+            self.up3,
+            self.up2,
         ]
 
     def forward(self, batch: torch.Tensor) -> torch.Tensor:
         """UNet forward method."""
-        x = batch
+        out = batch
 
-        conv1 = self.dconv_down1(x)
-        x = self.maxpool(conv1)
+        out_down1 = self.down1(out)
+        out = self.maxpool(out_down1)
 
-        conv2 = self.dconv_down2(x)
-        x = self.maxpool(conv2)
+        out_down2 = self.down2(out)
+        out = self.maxpool(out_down2)
 
-        conv3 = self.dconv_down3(x)
-        x = self.maxpool(conv3)
+        out_down3 = self.down3(out)
+        out = self.maxpool(out_down3)
 
-        x = self.dconv_down4(x)
+        out = self.down4(out)
 
-        x = self.upsample(x)
-        x = torch.cat([x, conv3], dim=1)
+        out = self.upsample(out)
+        out = torch.cat([out, out_down3], dim=1)
 
-        x = self.dconv_up3(x)
-        x = self.upsample(x)
-        x = torch.cat([x, conv2], dim=1)
+        out = self.up4(out)
+        out = self.upsample(out)
+        out = torch.cat([out, out_down2], dim=1)
 
-        x = self.dconv_up2(x)
-        x = self.upsample(x)
-        x = torch.cat([x, conv1], dim=1)
+        out = self.up3(out)
+        out = self.upsample(out)
+        out = torch.cat([out, out_down1], dim=1)
 
-        x = self.dconv_up1(x)
+        out = self.up2(out)
 
-        x = self.conv_last(x)
+        out = self.up1(out)
 
-        x = self.pixel_shuffle(x)
+        out = self.pixel_shuffle(out)
 
-        if self.use_residual:
-            x += F.interpolate(
-                batch[:, -self.out_channels :, :, :],  # RGB -> BGR
-                scale_factor=float(self.scale_factor),
-                mode='bicubic',
-            )
+        out += F.interpolate(
+            batch[:, -self.out_channels :, :, :],  # RGB -> BGR
+            scale_factor=float(self.scale_factor),
+            mode='bicubic',
+        )
 
-        return torch.clamp(x, min=-1, max=1)
-
-    def reparametrize(self):
-        for layer in self.layers:
-            for block in layer:
-                if hasattr(block, 'conv_adapter'):
-                    block.reparametrize_convs()
+        return torch.clamp(out, min=-1, max=1)
