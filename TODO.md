@@ -3,6 +3,9 @@
 > resume from `binarization/models/UNet`
 > current branch: `train_srunet`
 
+> it's a mess after the unet refactoring: not sure what to do next.
+> also, no GPUs available (not detected in solaris)
+
 > [standby] resume with: `ssh solaris && screen -r binarization`
 
 ## high priority
