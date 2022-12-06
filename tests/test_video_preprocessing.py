@@ -76,17 +76,6 @@ class TestPrepareOriginalDir:
         assert (original_dir / 'a.mp4').exists()
         assert (original_dir / 'b.mp4').exists()
 
-    def test_case2_with_exception(self, tmp_path):
-        data_dir = tmp_path / 'data'
-        data_dir.mkdir()
-        original_dir = data_dir / 'original_videos'
-        original_dir.mkdir()
-        (original_dir / 'a.mp4').touch()
-        (original_dir / 'b.mp4').touch()
-        (data_dir / 'c.mp4').touch()
-        with pytest.raises(Exception):
-            prepare_original_videos_dir(original_dir)
-
 
 def test_prepare_directories(tmp_path):
     d = tmp_path / 'data'

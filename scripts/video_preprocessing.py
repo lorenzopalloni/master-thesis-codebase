@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
-import warnings
 from pathlib import Path
 
 
@@ -45,18 +44,10 @@ def compress(
         '-movflags',  # weird option
         'faststart',
         '-vf',  # video filters
-        # (
-        #     f'scale=iw/{scale_factor}:ih/{scale_factor}'  # downscale
-        #     ',format=yuv420p'  # output format, defaults to yuv420p
-        # ),
         (
             f'scale=w={scaled_w}:h={scaled_h}'  # downscale
             ',format=yuv420p'  # output format, defaults to yuv420p
         ),
-        # (
-        #     f'scale=-{scale_factor}:'  # downscale
-        #     ',format=yuv420p'  # output format, defaults to yuv420p
-        # ),
         f'{output_fn}',
     ]
     subprocess.run(cmd, check=True)
@@ -124,18 +115,14 @@ def prepare_original_videos_dir(
         (original_videos_dir := input_dir / original_videos_namedir).mkdir()
         # mv <input_dir>/* -t <input_dir>/<original_videos_namedir>/
         for video_fp in input_dir.iterdir():
-            if video_fp != original_videos_dir:
+            cond1 = video_fp != original_videos_dir
+            cond2 = video_fp.suffix in {'.mp4', '.y4m'}
+            if cond1 and cond2:
                 shutil.move(
                     video_fp.as_posix(), original_videos_dir.as_posix()
                 )
     elif case2:
         original_videos_dir = input_dir
-        if not len(list(original_videos_dir.parent.iterdir())) == 1:
-            raise Exception(
-                f'"{original_videos_dir.parent.absolute().as_posix()}" is expected to'
-                f' contain only `./{original_videos_namedir}`, without any '
-                'other files.'
-            )
     return original_videos_dir
 
 
@@ -185,12 +172,6 @@ def main():
     ) = prepare_directories(input_dir)
 
     for original_fn in original_dir.iterdir():
-        if original_fn.suffix != '.mp4':
-            warnings.warn(
-                f"{original_fn} has no valid extension ({'.mp4'}).",
-                UserWarning,
-            )
-            continue
         compressed_fn = Path(compressed_videos_dir, original_fn.stem + '.mp4')
 
         compress(

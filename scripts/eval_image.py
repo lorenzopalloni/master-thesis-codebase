@@ -27,9 +27,8 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
             Defaults to None (that means all the available frames).
     """
     ckpt_path = cfg.model.ckpt_path_to_resume
-    save_dir = cfg.paths.outputs_dir / (
-        ckpt_path.parent.name + '_' + ckpt_path.stem
-    )
+    save_dir = cfg.paths.outputs_dir / ckpt_path.stem
+
     save_dir.mkdir(exist_ok=True, parents=True)
 
     device = 'cpu'  # set_up_cuda_device()
@@ -72,11 +71,21 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
 
 if __name__ == "__main__":
     default_cfg = get_default_config()
-    default_cfg.model.ckpt_path_to_resume = Path(
+
+    # unet_ckpt_path = Path(
+    #     default_cfg.paths.artifacts_dir,
+    #     "checkpoints",
+    #     "2022_11_15_07_43_30/unet_2_191268.pth",
+    # )
+
+    srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
-        "checkpoints",
-        "2022_11_15_07_43_30/unet_2_191268.pth",
+        "best_checkpoints",
+        "2022_12_06_srunet.pth",
     )
+
+    default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
     default_cfg.params.buffer_size = 1
-    default_cfg.model.name = 'unet'
+    default_cfg.model.name = 'srunet'
+
     eval_images(default_cfg, n_evaluations=128)

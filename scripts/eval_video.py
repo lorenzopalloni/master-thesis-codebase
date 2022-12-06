@@ -56,6 +56,16 @@ def eval_video(
     enable_show_compressed: bool = True,
     enable_write_to_video: bool = False,
 ):
+    """Upscales a compressed video with super-resolution.
+
+    Args:
+        cfg (Gifnoc): a valid configuration object.
+        video_path (Path): path to the compressed video to be evaluated.
+        enable_show_compressed (bool, optional): flag to show compressed
+            video along the upscaled one. Defaults to True.
+        enable_write_to_video (bool, optional): flag to enable little
+            captions. Defaults to False.
+    """
     scale_factor = cfg.params.scale_factor
     device = 'cpu'  # set_up_cuda_device()
     model = set_up_generator(cfg, device=device)
@@ -121,7 +131,7 @@ def eval_video(
 
     model = model.eval()
     with torch.no_grad():
-        tqdm_ = tqdm(range(n_frames), disable=True)
+        tqdm_ = tqdm(range(n_frames), disable=False)
         for i in tqdm_:
 
             tic = time.perf_counter()
@@ -151,28 +161,41 @@ def eval_video(
 
 if __name__ == '__main__':
     default_cfg = get_default_config()
-    default_cfg.model.ckpt_path_to_resume = Path(
-        default_cfg.paths.artifacts_dir,
-        "best_checkpoints",
-        "2022_11_21_unet.pth",
+
+    best_checkpoints_dir = Path(
+        default_cfg.paths.artifacts_dir, "best_checkpoints"
     )
 
-    default_cfg.params.buffer_size = 1
-    default_cfg.model.name = 'unet'
+    unet_ckpt_path = Path(
+        best_checkpoints_dir,
+        "2022_11_21_unet.pth",
+    )
+    del unet_ckpt_path
 
-    # video_path = Path(
-    #     default_cfg.paths.data_dir,
-    #     'compressed_videos',
-    #     'DFireS18Mitch_480x272_24fps_10bit_420.mp4'
-    # )
+    srunet_ckpt_path = Path(
+        best_checkpoints_dir,
+        "2022_12_06_srunet.pth",
+    )
+
+    default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
+    default_cfg.params.buffer_size = 1
+    default_cfg.model.name = 'srunet'
+
+    test_video_path = Path(
+        default_cfg.paths.data_dir,
+        'compressed_videos',
+        'old_town_cross_1080p50.mp4',
+    )
+
     homer_video_path = Path(
         default_cfg.paths.project_dir,
         "tests/assets/compressed_videos/homer_arch_512x372_120K.mp4",
     )
+    del homer_video_path
 
     eval_video(
         cfg=default_cfg,
-        video_path=homer_video_path,
+        video_path=test_video_path,
         enable_show_compressed=True,
-        enable_write_to_video=True,
+        enable_write_to_video=False,
     )
