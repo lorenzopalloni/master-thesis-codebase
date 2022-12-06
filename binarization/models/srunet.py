@@ -134,4 +134,3 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         )
 
         return torch.clamp(out, min=-1, max=1)
-

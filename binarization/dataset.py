@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-import itertools
 import json
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import PIL
@@ -85,6 +85,11 @@ def make_splits(
             for all compressed videos that contain their frame each.
         save_path (Optional[Path], optional): Filepath with ext .json
             to save the resulting dictionary. Defaults to None.
+        val_ratio (float): percentage of data assigned to the validation
+            set. Defaults to 0.025.
+        test_ratio (float): percentage of data assigned to the test
+            set. Defaults to 0.025.
+        random_state (int): random seed. Defaults to 42.
 
     Returns:
         dict[str, list[str]]: Partition in lists of all the filepaths

@@ -22,19 +22,17 @@ def set_up_cuda_device(device_id: int = 1, verbose: bool = False) -> str:
         print(f'Current device name: {curr_device_name}')
         print(f'Current device id: {curr_device_id}')
         print('Trying to change device id...')
-    if (
-        curr_device_count == 3  # solaris workstation
-        and curr_device_id != device_id
-    ):
+    condition1 = curr_device_count == 3  # likely solaris workstation
+    condition2 = curr_device_id != device_id
+    if condition1 and condition2:
         torch.cuda.set_device(f'cuda:{device_id}')
         if verbose:
             print(
                 f'Device has been changed from cuda:{curr_device_id} to cuda:{device_id}'
             )
             print('Current device name:', torch.cuda.get_device_name())
-    else:
-        if verbose:
-            print('Nothing changed.')
+    elif verbose:
+        print('Nothing changed.')
     return f'cuda:{torch.cuda.current_device()}'
 
 
@@ -72,16 +70,3 @@ def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> UNet | SRUNet:
             )
         )
     return generator
-
-
-# def set_up_srunet(cfg: Gifnoc) -> SRUNet:
-#     """Instantiates a UNet, resuming model weights if provided"""
-#     generator = SRUNet(
-#         num_filters=cfg.model.num_filters,
-#         use_batch_norm=cfg.model.use_batch_norm,
-#         scale_factor=cfg.params.scale_factor
-#     )
-#     if cfg.params.srunet.ckpt_path_to_resume:
-#         print(f'>>> resume from {cfg.params.srunet.ckpt_path_to_resume}')
-#         generator.load_state_dict(torch.load(cfg.params.srunet.ckpt_path_to_resume.as_posix()))
-#     return generator

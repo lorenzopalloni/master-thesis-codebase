@@ -99,9 +99,9 @@ def run_training(cfg: Gifnoc):
                 pred_generated, torch.ones_like(pred_generated)
             )
             loss_gen = (
-                cfg.params.w0 * loss_lpips
-                + cfg.params.w1 * loss_ssim
-                + cfg.params.w2 * loss_bce
+                cfg.params.lpips_weight * loss_lpips
+                + cfg.params.ssim_weight * loss_ssim
+                + cfg.params.adversarial_loss_weight * loss_bce
             )
 
             loss_gen.backward()
@@ -239,4 +239,3 @@ if __name__ == "__main__":
         experiment_name='SRUNet experiment',
         # ckpt_path_to_resume=srunet_ckpt,
     )
-

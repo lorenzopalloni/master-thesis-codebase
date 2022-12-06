@@ -30,9 +30,9 @@ class ParamsConfig:
     save_ckpt_every: int = 20_000
     num_workers: int = 1
     num_epochs: int = 3
-    w0: float = 1e-0  # LPIPS weight
-    w1: float = 1e-0  # SSIM weight
-    w2: float = 1e-3  # Adversarial loss weight
+    lpips_weight: float = 1e-0  # LPIPS weight
+    ssim_weight: float = 1e-0  # SSIM weight
+    adversarial_loss_weight: float = 1e-3  # Adversarial loss weight
     scale_factor: int = 4
 
 

@@ -43,7 +43,7 @@ def get_starting_random_position(
     random_position = 0
     if initial_position > patch_size:
         initial_position -= patch_size
-        random_position = np.random.randint(initial_position)
+        random_position = int(np.random.randint(initial_position))
     return random_position
 
 
@@ -70,9 +70,10 @@ def random_crop_images(
         random_width + patch_size,
         random_height + patch_size,
     )
-    # scale positions
-    original_image_positions = tuple(
-        map(lambda x: x * scale_factor, compressed_image_positions)
+    # scale positions for the original image
+    original_image_positions = (
+        compressed_position * scale_factor
+        for compressed_position in compressed_image_positions
     )
     original_patch = original_image.crop(original_image_positions)
     compressed_patch = compressed_image.crop(compressed_image_positions)
@@ -239,8 +240,9 @@ def estimate_n_batches_per_buffer(
     patch_size: int = 96,
 ) -> int:
     """Roughly estimates a good number of batches per buffer."""
-    w, h = compressed_image_width, compressed_image_height
-    average_patches_per_image = round((w * h) / (patch_size**2))  # 56
+    average_patches_per_image = round((
+        compressed_image_width * compressed_image_height
+    ) / (patch_size**2))  # 56
     average_available_patches = buffer_size * average_patches_per_image
     n_batches_per_buffer = round(
         (average_available_patches / factor) / batch_size
@@ -248,7 +250,8 @@ def estimate_n_batches_per_buffer(
     return n_batches_per_buffer
 
 
-def save_with_cv2(tensor_img: torch.Tensor, path: str) -> None:
+def save_with_cv2(tensor_img: torch.Tensor, path: Path) -> None:
+    """Saves an image with cv2."""
     tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
     numpy_img = np.transpose(tensor_img.cpu().numpy(), (1, 2, 0)) * 255
     numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
@@ -256,6 +259,7 @@ def save_with_cv2(tensor_img: torch.Tensor, path: str) -> None:
 
 
 def numpy_to_tensor(numpy_img: npt.NDArray[np.uint8]) -> torch.Tensor:
+    """Casts an array from numpy to torch."""
     scaled_numpy_img: npt.NDArray[np.float64] = numpy_img / 255
     tensor_img = torch.Tensor(scaled_numpy_img).cuda()
     tensor_img = tensor_img.permute(2, 0, 1).unsqueeze(0)
@@ -264,6 +268,7 @@ def numpy_to_tensor(numpy_img: npt.NDArray[np.uint8]) -> torch.Tensor:
 
 
 def tensor_to_numpy(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
+    """Casts an array from torch to numpy."""
     tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
     tensor_img = tensor_img.permute(1, 2, 0)
     numpy_img = tensor_img.byte().cpu().numpy()
@@ -276,6 +281,18 @@ def concatenate_images(
     img2: torch.Tensor,
     crop: bool = False,
 ) -> torch.Tensor:
+    """Concatenates two images.
+
+    Args:
+        img1 (torch.Tensor): an image.
+        img2 (torch.Tensor): another image.
+        crop (bool, optional): flag to crop 1/4 of each image before
+            contatenating them. Defaults to False.
+
+    Returns:
+        torch.Tensor: an image that is the concatenation of the two
+            given as inputs.
+    """
     assert (
         img1.shape[-1] == img2.shape[-1]
     ), f"{img1.shape=} not equal to {img2.shape=}."
@@ -290,6 +307,7 @@ def concatenate_images(
 def bicubic_interpolation(
     tensor_img: torch.Tensor, scale_factor: int = 4
 ) -> torch.Tensor:
+    """Upscales with bicubic interpolation a given image."""
     return torch.clip(
         F.interpolate(
             tensor_img,
