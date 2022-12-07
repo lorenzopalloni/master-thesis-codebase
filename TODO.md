@@ -1,5 +1,6 @@
 # TODO List
 
+> resume from branch 'normalization'
 > have a look at **normalization**
 
 > [standby] resume with: `ssh solaris && screen -r binarization`
