@@ -198,8 +198,8 @@ def run_experiment(
         cfg (Gifnoc): a valid configuration object.
         model_name (str): choose in ('unet', 'srunet').
         experiment_name (str): name of the mlflow experiment.
-        ckpt_path_to_resume (Path | None, optional): path to model weights.
-            Defaults to None.
+        ckpt_path_to_resume (Union[Path, None], optional): checkpoint path
+            to (trained) model weights. Defaults to None.
     """
     cfg.model.name = model_name
     cfg.model.ckpt_path_to_resume = ckpt_path_to_resume

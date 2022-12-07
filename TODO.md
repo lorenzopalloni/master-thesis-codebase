@@ -1,19 +1,17 @@
 # TODO List
 
-> resume from `binarization/models/UNet`
-> current branch: `train_srunet`
-
 > have a look at **normalization**
 
 > [standby] resume with: `ssh solaris && screen -r binarization`
 
+## recently DONEs
+- DONE - refactor UNet
+- DONE - refactor `binarization/models/common.py`
+- DONE - refactor SRUNet
+- DONE - be able to train SRUNet
+
 ## high priority
-
-- refactor UNet
-- refactor `binarization/models/common.py`
-- refactor SRUNet
-
-- train SRUNet
+- fix normalization ([0, 1] -> [-1, 1])
 
 - evaluate with `eval_image.py` both models
 - evaluate with `eval_video.py` both models
