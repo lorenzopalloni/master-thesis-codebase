@@ -23,7 +23,7 @@ from binarization.datatools import (
     min_max_scaler,
     tensor_to_numpy,
 )
-from binarization.traintools import set_up_generator
+from binarization.traintools import set_up_cuda_device, set_up_generator
 
 torch.backends.cudnn.benchmark = False  # Defaults to True
 
@@ -37,12 +37,16 @@ class WriteToVideo:
         height: int,
         scale_factor: int = 4,
         enable_show_compressed: bool = True,
+        enable_crop: bool = True,
     ):
         adjusted_width = make_4times_divisible(width)
         adjusted_height = make_4times_divisible(height)
 
-        self.frame_width = (
-            adjusted_width * scale_factor * (2 ** int(enable_show_compressed))
+        self.frame_width = int(
+            adjusted_width
+            * scale_factor
+            * (2 ** int(enable_show_compressed))
+            * (1 / 2 ** int(enable_crop))
         )
         self.frame_height = adjusted_height * scale_factor
 
@@ -53,11 +57,12 @@ class WriteToVideo:
             frameSize=(self.frame_width, self.frame_height),
         )
 
-    def write(self, tensor_img: torch.Tensor) -> None:
+    def write(self, tensor_img: torch.Tensor, model_name: str) -> None:
         """Overlays text on a given frame.
 
         Args:
             tensor_img (torch.Tensor): a frame.
+            model_name (str): name of the generator used.
         """
         numpy_img = tensor_to_numpy(tensor_img)
         h, w, _ = numpy_img.shape
@@ -75,7 +80,9 @@ class WriteToVideo:
         )
 
         cv2_put_text(text='bicubic interpolation', org=(offset, h - offset))
-        cv2_put_text(text='Unet (ours)', org=(w // 2 + offset, h - offset))
+        cv2_put_text(
+            text=f'{model_name} (ours)', org=(w // 2 + offset, h - offset)
+        )
 
         self.writer.write(numpy_img)
 
@@ -97,6 +104,7 @@ def eval_video(
     cfg: Gifnoc,
     video_path: Path,
     enable_show_compressed: bool = True,
+    enable_crop: bool = True,
     enable_write_to_video: bool = False,
 ):
     """Upscales a compressed video with super-resolution.
@@ -106,11 +114,13 @@ def eval_video(
         video_path (Path): path to the compressed video to be evaluated.
         enable_show_compressed (bool, optional): flag to show compressed
             video along the upscaled one. Defaults to True.
+        enable_crop (bool, optional): flag to enable cropping video
+            frames to enhance comparison. Defaults to True.
         enable_write_to_video (bool, optional): flag to enable little
             captions. Defaults to False.
     """
     scale_factor = cfg.params.scale_factor
-    device = 'cpu'  # set_up_cuda_device()
+    device = set_up_cuda_device(0)
     model = set_up_generator(cfg, device=device)
     reader = torchvision.io.VideoReader(video_path.as_posix(), 'video')
 
@@ -170,11 +180,11 @@ def eval_video(
                 tic = time.perf_counter()
 
                 compressed, resized_compressed = queue0.get()
-                generated = model(compressed).clip(0, 1)
+                generated = model(compressed.to(device)).clip(0, 1).cpu()
 
                 if enable_show_compressed:
                     generated = concatenate_images(
-                        resized_compressed, generated
+                        resized_compressed, generated, crop=enable_crop
                     )
 
                 queue1.put(generated)
@@ -187,7 +197,7 @@ def eval_video(
                     time.sleep(expected_time_between_frames - elapsed)
 
                 if enable_write_to_video:
-                    writer.write(generated)
+                    writer.write(generated, cfg.model.name)
 
             except KeyboardInterrupt:
                 break
@@ -214,7 +224,7 @@ if __name__ == '__main__':
 
     srunet_ckpt_path = Path(
         best_checkpoints_dir,
-        "2022_12_06_srunet.pth",
+        "2022_12_07_srunet.pth",
     )
 
     default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
