@@ -28,26 +28,69 @@ from binarization.traintools import set_up_generator
 torch.backends.cudnn.benchmark = False  # Defaults to True
 
 
-def write_to_video(tensor_img: torch.Tensor, writer: cv2.VideoWriter) -> None:
-    numpy_img = tensor_to_numpy(tensor_img)
-    h, w, _ = numpy_img.shape
-    offset = int(min(w, h) * 0.05)
-    font = cv2.FONT_HERSHEY_SIMPLEX
+class WriteToVideo:
+    """Helper to write text on video frames."""
 
-    cv2_put_text = partial(
-        cv2.putText,
-        img=numpy_img,
-        fontFace=font,
-        fontScale=0.5,
-        color=(10, 10, 10),
-        thickness=2,
-        lineType=cv2.LINE_AA,
-    )
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        scale_factor: int = 4,
+        enable_show_compressed: bool = True,
+    ):
+        adjusted_width = make_4times_divisible(width)
+        adjusted_height = make_4times_divisible(height)
 
-    cv2_put_text(text='bicubic interpolation', org=(offset, h - offset))
-    cv2_put_text(text='Unet (ours)', org=(w // 2 + offset, h - offset))
+        self.frame_width = (
+            adjusted_width * scale_factor * (2 ** int(enable_show_compressed))
+        )
+        self.frame_height = adjusted_height * scale_factor
 
-    writer.write(numpy_img)
+        self.writer = cv2.VideoWriter(
+            filename='rendered.mp4',
+            fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
+            fps=30,
+            frameSize=(self.frame_width, self.frame_height),
+        )
+
+    def write(self, tensor_img: torch.Tensor) -> None:
+        """Overlays text on a given frame.
+
+        Args:
+            tensor_img (torch.Tensor): a frame.
+        """
+        numpy_img = tensor_to_numpy(tensor_img)
+        h, w, _ = numpy_img.shape
+        offset = int(min(w, h) * 0.05)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        cv2_put_text = partial(
+            cv2.putText,
+            img=numpy_img,
+            fontFace=font,
+            fontScale=1,
+            color=(10, 10, 10),
+            thickness=2,
+            lineType=cv2.LINE_AA,
+        )
+
+        cv2_put_text(text='bicubic interpolation', org=(offset, h - offset))
+        cv2_put_text(text='Unet (ours)', org=(w // 2 + offset, h - offset))
+
+        self.writer.write(numpy_img)
+
+    def release(self) -> None:
+        """Releases the modified video."""
+        self.writer.release()
+
+
+def get_video_size(video_path: Path) -> tuple[int, int]:
+    """Retrieves video width/height."""
+    temp_capture = cv2.VideoCapture(video_path.as_posix())
+    width = int(temp_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(temp_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    del temp_capture
+    return width, height
 
 
 def eval_video(
@@ -76,25 +119,13 @@ def eval_video(
     duration = metadata['video']['duration'][0]
     n_frames = int(fps * duration)
 
-    # use cv2.VideoCapture to get w/h of the video
-    temp_capture = cv2.VideoCapture(video_path.as_posix())
-    width = int(temp_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(temp_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    adjusted_width = make_4times_divisible(width)
-    adjusted_height = make_4times_divisible(height)
-    del temp_capture
-
     if enable_write_to_video:
-        frame_width = (
-            adjusted_width * scale_factor * (2 ** int(enable_show_compressed))
-        )
-        frame_height = adjusted_height * scale_factor
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(
-            filename='rendered.mp4',
-            fourcc=fourcc,
-            fps=30,
-            frameSize=(frame_width, frame_height),
+        width, height = get_video_size(video_path)
+        writer = WriteToVideo(
+            width=width,
+            height=height,
+            scale_factor=scale_factor,
+            enable_show_compressed=enable_show_compressed,
         )
 
     queue0: Queue = Queue(1)
@@ -117,7 +148,7 @@ def eval_video(
         while True:
             tensor_img = queue.get()
             img = tensor_to_numpy(tensor_img)
-            # img = cv2.resize(img, (1000, 500))  # NOTE: remove this /!\
+            img = cv2.resize(img, (1000, 500))  # NOTE: remove this /!\
             cv2.imshow('rendering', img)
             cv2.waitKey(1)
             queue.task_done()
@@ -132,29 +163,38 @@ def eval_video(
     model = model.eval()
     with torch.no_grad():
         tqdm_ = tqdm(range(n_frames), disable=False)
-        for i in tqdm_:
+        for frame_idx in tqdm_:
+            del frame_idx
 
-            tic = time.perf_counter()
+            try:
+                tic = time.perf_counter()
 
-            compressed, resized_compressed = queue0.get()
-            generated = model(compressed).clip(0, 1)
+                compressed, resized_compressed = queue0.get()
+                generated = model(compressed).clip(0, 1)
 
-            if enable_show_compressed:
-                generated = concatenate_images(resized_compressed, generated)
+                if enable_show_compressed:
+                    generated = concatenate_images(
+                        resized_compressed, generated
+                    )
 
-            queue1.put(generated)
+                queue1.put(generated)
 
-            toc = time.perf_counter()
-            elapsed = toc - tic
+                toc = time.perf_counter()
+                elapsed = toc - tic
 
-            expected_time_between_frames = fps / 1000
-            if elapsed < expected_time_between_frames:
-                time.sleep(expected_time_between_frames - elapsed)
+                expected_time_between_frames = fps / 1000
+                if elapsed < expected_time_between_frames:
+                    time.sleep(expected_time_between_frames - elapsed)
 
-            if enable_write_to_video:
-                write_to_video(generated, writer)
-                if i == n_frames - 1:
-                    writer.release()
+                if enable_write_to_video:
+                    writer.write(generated)
+
+            except KeyboardInterrupt:
+                break
+
+        if enable_write_to_video:
+            writer.release()
+
     queue0.join()
     queue1.join()
 
@@ -197,5 +237,5 @@ if __name__ == '__main__':
         cfg=default_cfg,
         video_path=test_video_path,
         enable_show_compressed=True,
-        enable_write_to_video=False,
+        enable_write_to_video=True,
     )
