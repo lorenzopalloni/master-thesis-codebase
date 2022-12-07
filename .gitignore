@@ -1,9 +1,10 @@
 # big-file folders
 data/*
-!data/splits.json
 artifacts/
 checkpoints/
 outputs/
+old_data/
+*.mp4
 
 # any jupyter notebook
 **/*/*.ipynb

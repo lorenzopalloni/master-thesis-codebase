@@ -7,11 +7,14 @@ import itertools
 import warnings
 from pathlib import Path
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import PIL
 import torch
-import torchvision.transforms.functional as F
+import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 
 
 def compose(*functions):
@@ -40,7 +43,7 @@ def get_starting_random_position(
     random_position = 0
     if initial_position > patch_size:
         initial_position -= patch_size
-        random_position = np.random.randint(initial_position)
+        random_position = int(np.random.randint(initial_position))
     return random_position
 
 
@@ -48,7 +51,7 @@ def random_crop_images(
     original_image: PIL.Image.Image,
     compressed_image: PIL.Image.Image,
     patch_size: int = 96,
-    scale_factor: int = 2,
+    scale_factor: int = 4,
 ) -> tuple[PIL.Image.Image, PIL.Image.Image]:
     """Randomly crops two images.
 
@@ -67,16 +70,17 @@ def random_crop_images(
         random_width + patch_size,
         random_height + patch_size,
     )
-    # scale positions
-    original_image_positions = tuple(
-        map(lambda x: x * scale_factor, compressed_image_positions)
+    # scale positions for the original image
+    original_image_positions = (
+        compressed_position * scale_factor
+        for compressed_position in compressed_image_positions
     )
     original_patch = original_image.crop(original_image_positions)
     compressed_patch = compressed_image.crop(compressed_image_positions)
     return original_patch, compressed_patch
 
 
-def compute_adjusted_dimension(an_integer: int) -> int:
+def make_4times_divisible(an_integer: int) -> int:
     """Given an integer `an_integer`, returns another integer that:
     - is greater than `an_integer`
     - is divisible at least four times by 2
@@ -100,12 +104,12 @@ def compute_adjusted_dimension(an_integer: int) -> int:
     return an_integer
 
 
-def adjust_image_for_unet(image: torch.Tensor) -> torch.Tensor:
+def make_4times_downscalable(image: torch.Tensor) -> torch.Tensor:
     """Pads until img_h and img_w are both divisible by 2 at least 4 times."""
     height, width = image.shape[-2], image.shape[-1]
-    adjusted_height = compute_adjusted_dimension(height)
-    adjusted_width = compute_adjusted_dimension(width)
-    return F.pad(
+    adjusted_height = make_4times_divisible(height)
+    adjusted_width = make_4times_divisible(width)
+    return TF.pad(
         image,
         padding=[
             (adjusted_width - width) // 2,  # left/right
@@ -113,10 +117,11 @@ def adjust_image_for_unet(image: torch.Tensor) -> torch.Tensor:
         ],
     )
 
-def inv_adjust_image_for_unet(
+
+def inv_make_4times_downscalable(
     original: torch.Tensor, generated: torch.Tensor
 ) -> torch.Tensor:
-    """Crops as much as needed to invert `adjust_image_for_unet`."""
+    """Crops as much as needed to invert `make_4times_downscalable`."""
     height_original, width_original = original.shape[-2], original.shape[-1]
     height_generated, width_generated = (
         generated.shape[-2],
@@ -124,19 +129,19 @@ def inv_adjust_image_for_unet(
     )
     height_offset = (height_generated - height_original) // 2
     width_offset = (width_generated - width_original) // 2
-    return F.crop(
+    return TF.crop(
         generated, height_offset, width_offset, height_original, width_original
     )
 
 
-def process_raw_generated(
+def postprocess(
     original: torch.Tensor, generated: torch.Tensor
 ) -> torch.Tensor:
-    """Postprocesses outputs from super-resolution generator models"""
+    """Postprocesses a super-resolution generator output."""
     generated = inv_min_max_scaler(generated)
     generated = generated.clip(0, 255)
     generated = generated / 255.0
-    return inv_adjust_image_for_unet(original=original, generated=generated)
+    return inv_make_4times_downscalable(original=original, generated=generated)
 
 
 def draw_validation_fig(
@@ -146,9 +151,9 @@ def draw_validation_fig(
     figsize: tuple[int, int] = (12, 5),
 ) -> plt.Figure:
     """Draws three images in a row with matplotlib."""
-    original_image_pil = F.to_pil_image(original_image)
-    compressed_image_pil = F.to_pil_image(compressed_image)
-    generated_image_pil = F.to_pil_image(generated_image)
+    original_image_pil = TF.to_pil_image(original_image)
+    compressed_image_pil = TF.to_pil_image(compressed_image)
+    generated_image_pil = TF.to_pil_image(generated_image)
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
     ax1.imshow(original_image_pil)
     ax1.set_title('high quality')
@@ -175,30 +180,30 @@ def lists_have_same_elements(a_list: list, another_list: list) -> bool:
 
 
 def list_files(
-    path: Path, extension: str, sort_ascending: bool = True
+    path: Path, extensions: str | list[str] = '', sort_ascending: bool = True
 ) -> list[Path]:
-    """lists files in a given directory with the same extension.
+    """Lists files in a given directory.
 
     By default, the result is provided in lexicographic order.
     """
     res = []
-    for x in path.iterdir():
-        if not x.is_dir():
-            if x.suffix.lstrip('.') == extension.lstrip('.'):
-                res.append(x)
-            else:
-                warnings.warn(
-                    f'{x} has not been included since it has '
-                    f'a different extension than {extension}.',
-                    UserWarning,
-                )
+    for child_path in path.iterdir():
+        if child_path.is_dir():
+            continue
+        if extensions and child_path.suffix.lower() not in extensions:
+            warnings.warn(
+                f'{child_path} has no valid extension ({extensions}).',
+                UserWarning,
+            )
+            continue
+        res.append(child_path)
     if sort_ascending:
         return sorted(res)
     return res
 
 
 def list_directories(path: Path, sort_ascending: bool = True) -> list[Path]:
-    """lists all the directories in a given path.
+    """Lists all the directories in a given path.
 
     By default, the result is provided in lexicographic order.
     """
@@ -209,7 +214,7 @@ def list_directories(path: Path, sort_ascending: bool = True) -> list[Path]:
 
 
 def list_subdir_files(
-    path: Path, extension: str, sort_ascending: bool = True
+    path: Path, extensions: str | list[str] = '', sort_ascending: bool = True
 ) -> list[Path]:
     """lists all files in the second level directories of the given path.
 
@@ -217,10 +222,98 @@ def list_subdir_files(
     """
     res = itertools.chain.from_iterable(
         (
-            list_files(i_dir, extension, sort_ascending=False)
+            list_files(i_dir, extensions, sort_ascending=False)
             for i_dir in list_directories(path)
         )
     )
     if sort_ascending:
         return sorted(res)
     return list(res)
+
+
+def estimate_n_batches_per_buffer(
+    factor: float = 3.0,
+    buffer_size: int = 16,
+    compressed_image_width: int = 944,
+    compressed_image_height: int = 544,
+    batch_size: int = 14,
+    patch_size: int = 96,
+) -> int:
+    """Roughly estimates a good number of batches per buffer."""
+    average_patches_per_image = round((
+        compressed_image_width * compressed_image_height
+    ) / (patch_size**2))  # 56
+    average_available_patches = buffer_size * average_patches_per_image
+    n_batches_per_buffer = round(
+        (average_available_patches / factor) / batch_size
+    )
+    return n_batches_per_buffer
+
+
+def save_with_cv2(tensor_img: torch.Tensor, path: Path) -> None:
+    """Saves an image with cv2."""
+    tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
+    numpy_img = np.transpose(tensor_img.cpu().numpy(), (1, 2, 0)) * 255
+    numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
+    cv2.imwrite(path, numpy_img)
+
+
+def numpy_to_tensor(numpy_img: npt.NDArray[np.uint8]) -> torch.Tensor:
+    """Casts an array from numpy to torch."""
+    scaled_numpy_img: npt.NDArray[np.float64] = numpy_img / 255
+    tensor_img = torch.Tensor(scaled_numpy_img).cuda()
+    tensor_img = tensor_img.permute(2, 0, 1).unsqueeze(0)
+    tensor_img = min_max_scaler(tensor_img)
+    return tensor_img
+
+
+def tensor_to_numpy(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:
+    """Casts an array from torch to numpy."""
+    tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
+    tensor_img = tensor_img.permute(1, 2, 0)
+    numpy_img = tensor_img.byte().cpu().numpy()
+    numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
+    return numpy_img
+
+
+def concatenate_images(
+    img1: torch.Tensor,
+    img2: torch.Tensor,
+    crop: bool = False,
+) -> torch.Tensor:
+    """Concatenates two images.
+
+    Args:
+        img1 (torch.Tensor): an image.
+        img2 (torch.Tensor): another image.
+        crop (bool, optional): flag to crop 1/4 of each image before
+            contatenating them. Defaults to False.
+
+    Returns:
+        torch.Tensor: an image that is the concatenation of the two
+            given as inputs.
+    """
+    assert (
+        img1.shape[-1] == img2.shape[-1]
+    ), f"{img1.shape=} not equal to {img2.shape=}."
+    if crop:
+        width = img1.shape[-1]
+        w_4 = width // 4
+        img1 = img1[:, :, :, w_4 : w_4 * 3]
+        img2 = img2[:, :, :, w_4 : w_4 * 3]
+    return torch.cat([img1, img2], dim=3)
+
+
+def bicubic_interpolation(
+    tensor_img: torch.Tensor, scale_factor: int = 4
+) -> torch.Tensor:
+    """Upscales with bicubic interpolation a given image."""
+    return torch.clip(
+        F.interpolate(
+            tensor_img,
+            scale_factor=scale_factor,
+            mode='bicubic',
+        ),
+        min=0,
+        max=1,
+    )

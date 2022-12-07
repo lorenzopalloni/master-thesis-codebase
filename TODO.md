@@ -1,34 +1,57 @@
-TODO List
-==========
+# TODO List
 
-> resume from train.py
-> need a new scripts/eval_image.py
+> have a look at **normalization**
+
+> [standby] resume with: `ssh solaris && screen -r binarization`
+
+## recently DONEs
+- DONE - refactor UNet
+- DONE - refactor `binarization/models/common.py`
+- DONE - refactor SRUNet
+- DONE - be able to train SRUNet
 
 ## high priority
-- train UNet with BVI-DVC
-- eval.py for video + timing
+- fix normalization ([0, 1] -> [-1, 1])
 
-- train SR-UNet with BVI-DVC
+- evaluate with `eval_image.py` both models
+- evaluate with `eval_video.py` both models
+- implement binarized UNet
+- train binarized UNet
+- implement binarized SRUNet
+- train binarized SRUNet
+- evaluate them all
+
 - train with/without ssim
 
 - understand why your way of including ssim was so bad for the training
 ---
 
 ## medium priority
+- original frames in .png instead of .jpg
 - check structural reparametrization in DiracNets and RepVGG
 - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
 
 ---
 
 ## low priority
-- pay attention in piq: LPIPS seems to yield different results than in the
+- take a look in piq: LPIPS seems to yield different results than in the
     original implementation
 
 ---
+### How to compile torchvision with ffmpeg support:
+    1. git clone git@github.com:pytorch/vision.git
+    2. sudo apt install ffmpeg
+    3. sudo apt install libavcodec-dev
+    4. sudo apt install libavfilter-dev
+    5. sudo apt install libswscale-dev
+    6. pip install --upgrade av==8.1.0
+    7. cd ./vision && python3.8 setup.py install
+
+### BVI-DVC alternative
 An alternative to the official BVI-DVC dataset can be found at [https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
 Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequences, and this alternative contains only 772 sequences, and it is 83.8GB big.
 
-## Videos from [Derf's collection](https://media.xiph.org/video/derf/) used by Vaccaro in his paper as an extra test dataset:
+### Videos from [Derf's collection](https://media.xiph.org/video/derf/) used by Vaccaro in his paper as an extra test dataset:
 + -> downloaded on Alienware-M15
 - -> not yet downloaded on Alienware-M15
     + `ducks_take_off`
@@ -46,7 +69,7 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
     + `in_to_tree`
     + `sunflower`
 
-#### DONEs
+## DONEs
 - DONE - .gitignore literature/ folder, plus Python and LaTex stuff
 - DONE - convert sh script for video preparation to Python
 - DONE - implement a custom pytorch dataset
@@ -62,7 +85,7 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
     especially why the latter doesn't handle input values < 0, while the
     former can.
 - DONE - do some experimentation with the UNet
-- DONE - study SR-UNet
+- DONE - study SRUNet
 - DONE - set up [Hydra Structured Config](https://hydra.cc/docs/advanced/terminology/#structured-config)
 - DONE - log more info while training
 - DONE - solve GPU issue in Ubuntu 20.04 (Alienware)
@@ -86,5 +109,10 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - set up data
 - DONE - learn how to use `screen` command
 - DONE - fix: image too big to be loaded and cropped one-by-one
-- DONE - add in config buffer_size and n_batches_per_buffer
-- DONE - refactor batch_generator, from function to class
+- DONE - add in config `buffer_size` and `n_batches_per_buffer`
+- DONE - refactor `batch_generator`, from function to class
+- DONE - debug data loader, there's something weird
+- DONE - symbolic link `ln -s ./data/original_videos` -> `/homes/datasets/BVI_DVC/3h<...>/Videos/`
+- DONE - run `./scripts/video_preprocessing.py -i data -s 4`
+- DONE - train UNet with `scale_factor == 4`
+- DONE - implement `eval_video.py` (video + timing) while UNet is training

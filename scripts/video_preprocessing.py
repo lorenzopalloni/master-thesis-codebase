@@ -1,24 +1,32 @@
+"""Utilities for compressing and frame splitting a video."""
+
+from __future__ import annotations
+
 import argparse
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Tuple, Union
 
 
 def compress(
-    input_fn: Union[Path, str],
-    output_fn: Union[Path, str],
+    input_fn: Path | str,
+    output_fn: Path | str,
     crf: int = 23,
-    scale_factor: int = 2,
+    scale_factor: int = 4,
 ):
     """Compresses a video.
+
+    Note: do not worry about the following warning (source: google it):
+    "deprecated pixel format used, make sure you did set range correctly"
 
     Args:
         input_fn (Union[Path, str]): Filename of the input video.
         output_fn (Union[Path, str]): Filename of the compressed video.
         crf (int, optional): Constant Rate Factor. Defaults to 23.
-        scale_factor (int): Scale factor. Defaults to 2.
+        scale_factor (int): Scale factor. Defaults to 4.
     """
+    scaled_w = f"'iw/{scale_factor}-mod(iw/{scale_factor},2)'"
+    scaled_h = f"'ih/{scale_factor}-mod(ih/{scale_factor},2)'"
     cmd = [
         'ffmpeg',
         '-i',
@@ -37,21 +45,17 @@ def compress(
         'faststart',
         '-vf',  # video filters
         (
-            f'scale=iw/{scale_factor}:ih/{scale_factor}'  # downscale
+            f'scale=w={scaled_w}:h={scaled_h}'  # downscale
             ',format=yuv420p'  # output format, defaults to yuv420p
         ),
-        # (
-        #     f'scale=-{scale_factor}:iw'  # downscale
-        #     ',format=yuv420p'  # output format, defaults to yuv420p
-        # ),
         f'{output_fn}',
     ]
     subprocess.run(cmd, check=True)
 
 
 def video_to_frames(
-    input_fn: Union[Path, str],
-    output_dir: Union[Path, str],
+    input_fn: Path | str,
+    output_dir: Path | str,
 ):
     """Splits a video into .jpg frames.
 
@@ -76,77 +80,90 @@ def video_to_frames(
     subprocess.run(cmd, check=True)
 
 
-def all_files_have_the_same_extension(folder: Union[Path, str]) -> bool:
-    """Returns True if all the files in `folder` have the same extension."""
-    folder = Path(folder)
-    files = list(x for x in folder.iterdir() if not x.is_dir())
-    return len(files) == 0 or len(set(x.suffix for x in files)) == 1
-
-
-def assure_same_extension_among_files(
-    folder: Union[Path, str]
-) -> Union[bool, Exception]:
-    """Returns True if all the files in `folder` have the same extension,
-    otherwise raise an exception.
-    """
-    folder = Path(folder)
-    if all_files_have_the_same_extension(folder):
+def files_have_same_ext(
+    input_dir: Path | str, enable_assert: bool = False
+) -> bool | Exception:
+    """Returns True if all the files in `input_dir` have the same extension."""
+    input_dir = Path(input_dir)
+    files = list(x for x in input_dir.iterdir() if not x.is_dir())
+    ans = len(files) == 0 or len(set(x.suffix for x in files)) == 1
+    if not enable_assert:
+        return ans
+    if ans:
         return True
     raise Exception(
-        f'All files in "{folder.resolve().as_posix()}" must have the'
+        f'All files in "{input_dir.absolute().as_posix()}" must have the'
         ' same extension.'
     )
 
 
-def prepare_original_dir(input_dir: Union[Path, str]) -> Path:
+def prepare_original_videos_dir(
+    input_dir: Path | str,
+    original_videos_namedir: str = 'original_videos',
+) -> Path:
+    """Ensures a standard directory structure for original videos."""
+    original_videos_namedir = 'original_videos'
     input_dir = Path(input_dir)
 
-    case1 = input_dir.resolve().name != 'original_videos'
-    case11 = case1 and (input_dir / 'original_videos').is_dir()
-    case2 = input_dir.resolve().name == 'original_videos'
+    case1 = input_dir.absolute().name != original_videos_namedir
+    case11 = case1 and (input_dir / original_videos_namedir).is_dir()
+    case2 = input_dir.absolute().name == original_videos_namedir
 
     if case11:
-        original_dir = input_dir / 'original_videos'
-        assure_same_extension_among_files(original_dir)
+        original_videos_dir = input_dir / original_videos_namedir
     elif case1:
-        assure_same_extension_among_files(input_dir)
-        (original_dir := input_dir / 'original_videos').mkdir()
-        # move all files in <input_dir>/ to <input_dir>/original, excluding
-        # the latter
+        (original_videos_dir := input_dir / original_videos_namedir).mkdir()
+        # mv <input_dir>/* -t <input_dir>/<original_videos_namedir>/
         for video_fp in input_dir.iterdir():
-            if video_fp != original_dir:
-                shutil.move(video_fp.as_posix(), original_dir.as_posix())
+            cond1 = video_fp != original_videos_dir
+            cond2 = video_fp.suffix in {'.mp4', '.y4m'}
+            if cond1 and cond2:
+                shutil.move(
+                    video_fp.as_posix(), original_videos_dir.as_posix()
+                )
     elif case2:
-        assure_same_extension_among_files(input_dir)
-        original_dir = input_dir
-        if not len(list(original_dir.parent.iterdir())) == 1:
-            raise Exception(
-                f'"{original_dir.parent.resolve().as_posix()}" is expected to'
-                ' contain only `./original`, without any other files.'
-            )
-    return original_dir
+        original_videos_dir = input_dir
+    return original_videos_dir
 
 
 def prepare_directories(
-    input_dir: Union[Path, str]
-) -> Tuple[Path, Path, Path, Path]:
-    original_dir = prepare_original_dir(input_dir)
+    input_dir: Path | str,
+    original_videos_namedir: str = 'original_videos',
+) -> tuple[Path, ...]:
+    """Asserts a standard dir structure for original/compressed videos/frames."""
+    original_dir = prepare_original_videos_dir(
+        input_dir=input_dir, original_videos_namedir=original_videos_namedir
+    )
 
     root_dir = original_dir.parent
-    (compressed_videos_dir := root_dir / 'compressed_videos').mkdir(exist_ok=True)
+    (compressed_videos_dir := root_dir / 'compressed_videos').mkdir(
+        exist_ok=True
+    )
 
     (original_frames_dir := root_dir / 'original_frames').mkdir(exist_ok=True)
-    (compressed_frames_dir := root_dir / 'compressed_frames').mkdir(exist_ok=True)
-    return original_dir, compressed_videos_dir, original_frames_dir, compressed_frames_dir
+    (compressed_frames_dir := root_dir / 'compressed_frames').mkdir(
+        exist_ok=True
+    )
+    return (
+        original_dir,
+        compressed_videos_dir,
+        original_frames_dir,
+        compressed_frames_dir,
+    )
+
+
+def arg_parse() -> argparse.Namespace:
+    """Parses input arguments."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input_dir', type=str, default='.')
+    parser.add_argument('-s', '--scale_factor', type=int, default=4)
+    return parser.parse_args()
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input_dir', type=str, default='.')
-    parser.add_argument('-s', '--scale_factor', type=int, default=2)
-    args = parser.parse_args()
+    """Main routine for video preprocessing."""
+    args = arg_parse()
     input_dir = Path(args.input_dir)
-
     (
         original_dir,
         compressed_videos_dir,
@@ -155,7 +172,7 @@ def main():
     ) = prepare_directories(input_dir)
 
     for original_fn in original_dir.iterdir():
-        compressed_fn = compressed_videos_dir / ('compressed_' + original_fn.stem + '.mp4')
+        compressed_fn = Path(compressed_videos_dir, original_fn.stem + '.mp4')
 
         compress(
             input_fn=original_fn,
@@ -171,7 +188,9 @@ def main():
         video_to_frames(
             input_fn=original_fn, output_dir=original_frames_subdir
         )
-        video_to_frames(input_fn=compressed_fn, output_dir=compressed_frames_subdir)
+        video_to_frames(
+            input_fn=compressed_fn, output_dir=compressed_frames_subdir
+        )
 
 
 if __name__ == '__main__':

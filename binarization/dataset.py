@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-import itertools
 import json
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import PIL
@@ -18,10 +18,10 @@ from sklearn.model_selection import train_test_split
 from torchvision.utils import Image
 
 from binarization.datatools import (
+    list_directories,
+    list_files,
     min_max_scaler,
     random_crop_images,
-    list_files,
-    list_directories,
 )
 
 
@@ -85,6 +85,11 @@ def make_splits(
             for all compressed videos that contain their frame each.
         save_path (Optional[Path], optional): Filepath with ext .json
             to save the resulting dictionary. Defaults to None.
+        val_ratio (float): percentage of data assigned to the validation
+            set. Defaults to 0.025.
+        test_ratio (float): percentage of data assigned to the test
+            set. Defaults to 0.025.
+        random_state (int): random seed. Defaults to 42.
 
     Returns:
         dict[str, list[str]]: Partition in lists of all the filepaths
@@ -117,9 +122,10 @@ def make_splits(
 def get_splits(
     cfg: Gifnoc, exist_ok: bool = True, random_state: int = 42
 ) -> dict[str, list[str]]:
-    """Fetches `data_dir/splits.json`.
+    """Fetches `<data_dir>/splits.json`.
 
-    If it does not exist, it creates it, then returns it.
+    Returns `<data_dir>/splits.json` if it does exist.
+    Otherwise, this function creates it, then returns it.
 
     Args:
         cfg (Gifnoc): Configuration object.
@@ -147,7 +153,7 @@ def get_splits(
 
 
 class Stage(Enum):
-    """Represents a model stage."""
+    """Model stages: {train, val, test}."""
 
     TRAIN = 'train'
     VAL = 'val'
@@ -229,38 +235,33 @@ def get_paired_paths(cfg: Gifnoc, stage: Stage) -> list[tuple[Path, Path]]:
     Returns:
         list[tuple[Path, Path]]: Pairs of original/compressed frame paths,
             such as [
-                (original_path_1, compressed_path_1),
-                (original_path_2, compressed_path_2),
+                (out_path_1, in_path_1),
+                (out_path_2, in_path_2),
                 ...
             ].
     """
     splits = get_splits(cfg)
-    original_paths = list(
-        itertools.chain.from_iterable(
-            list_files(
-                Path(cfg.paths.original_frames_dir, path), extension='.png'
-            )
-            for path in splits[stage.value]
-        )
-    )
-    compressed_paths = list(
-        itertools.chain.from_iterable(
-            list_files(
-                Path(cfg.paths.compressed_frames_dir, path), extension='.jpg'
-            )
-            for path in splits[stage.value]
-        )
-    )
-    assert len(original_paths) == len(compressed_paths)
-    return list(zip(original_paths, compressed_paths))
+    out_paths = []
+    in_paths = []
+    for video_name in splits[stage.value]:
+        out_frames_dir = Path(cfg.paths.original_frames_dir, video_name)
+        out_paths.extend(list_files(out_frames_dir, extensions=['.png', '.jpg']))
+        in_frames_dir = Path(cfg.paths.compressed_frames_dir, video_name)
+        in_paths.extend(list_files(in_frames_dir, extensions=['.png', '.jpg']))
+
+    assert len(out_paths) == len(in_paths)
+    return list(zip(out_paths, in_paths))
 
 
 def default_train_pipe(
-    original_image: PIL.Image.Image, compressed_image: PIL.Image.Image
+    original_image: PIL.Image.Image,
+    compressed_image: PIL.Image.Image,
+    scale_factor: int = 4,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     original_patch, compressed_patch = random_crop_images(
         original_image=original_image,
         compressed_image=compressed_image,
+        scale_factor=scale_factor,
     )
     if np.random.random() < 0.5:
         original_patch = F.hflip(original_patch)
@@ -272,12 +273,16 @@ def default_train_pipe(
 
 
 def default_val_pipe(
-    original_image: PIL.Image.Image, compressed_image: PIL.Image.Image
+    original_image: PIL.Image.Image,
+    compressed_image: PIL.Image.Image,
+    scale_factor: int = 4,
+    random_seed: int = 42
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    np.random.seed(42)  # crop at random positions but always the same
+    np.random.seed(random_seed)  # crop at random positions but always the same
     original_patch, compressed_patch = random_crop_images(
         original_image=original_image,
         compressed_image=compressed_image,
+        scale_factor=scale_factor,
     )
     np.random.seed(None)
     return (
@@ -287,8 +292,11 @@ def default_val_pipe(
 
 
 def default_test_pipe(
-    original_image: PIL.Image.Image, compressed_image: PIL.Image.Image
+    original_image: PIL.Image.Image,
+    compressed_image: PIL.Image.Image,
+    scale_factor: int = 4,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    del scale_factor
     return (
         min_max_scaler(F.pil_to_tensor(original_image)),
         min_max_scaler(F.pil_to_tensor(compressed_image)),
@@ -358,6 +366,8 @@ class BatchGenerator:
             self.n_batches_per_buffer = buffer_size
             self.batch_size = 1
 
+        self.scale_factor = cfg.params.scale_factor
+
     def __len__(self):
         return len(self.buffer_generator) * self.n_batches_per_buffer
 
@@ -388,12 +398,13 @@ class BatchGenerator:
             original_image, compressed_image = self.buffer[random_idx]
             original_patch, compressed_patch = self.frame_to_patch_pipes[
                 self.stage
-            ](original_image, compressed_image)
+            ](original_image, compressed_image, scale_factor=self.scale_factor)
             original_batch.append(original_patch)
             compressed_batch.append(compressed_patch)
 
         self.batch_idx += 1
         return torch.stack(original_batch), torch.stack(compressed_batch)
+
 
 def get_train_batches(cfg):
     return BatchGenerator(
@@ -401,8 +412,9 @@ def get_train_batches(cfg):
         stage=Stage.TRAIN,
         buffer_size=cfg.params.buffer_size,
         n_batches_per_buffer=cfg.params.n_batches_per_buffer,
-        batch_size=cfg.params.batch_size
+        batch_size=cfg.params.batch_size,
     )
+
 
 def get_val_batches(cfg):
     return BatchGenerator(
@@ -410,8 +422,9 @@ def get_val_batches(cfg):
         stage=Stage.VAL,
         buffer_size=cfg.params.buffer_size,
         n_batches_per_buffer=cfg.params.n_batches_per_buffer,
-        batch_size=cfg.params.batch_size
+        batch_size=cfg.params.batch_size,
     )
+
 
 def get_test_batches(cfg):
     return BatchGenerator(
@@ -419,12 +432,13 @@ def get_test_batches(cfg):
         stage=Stage.TEST,
         buffer_size=cfg.params.buffer_size,
         n_batches_per_buffer=cfg.params.n_batches_per_buffer,
-        batch_size=cfg.params.batch_size
+        batch_size=cfg.params.batch_size,
     )
+
 
 def get_batches(cfg):
     return (
         get_train_batches(cfg),
         get_val_batches(cfg),
-        get_test_batches(cfg)
+        get_test_batches(cfg),
     )
