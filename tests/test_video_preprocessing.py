@@ -1,6 +1,4 @@
 # pylint: disable=missing-module-docstring,missing-function-docstring,missing-class-docstring
-import pytest
-
 from scripts.video_preprocessing import (
     files_have_same_ext,
     prepare_directories,

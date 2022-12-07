@@ -96,6 +96,7 @@ enable=
 # --disable=W"
 
 disable=
+    invalid-name,
 
 
 [REPORTS]

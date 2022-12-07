@@ -44,24 +44,22 @@ def set_up_checkpoints_dir(artifacts_dir: Path) -> Path:
     return checkpoints_dir
 
 
-def set_up_generator(cfg: Gifnoc, device: str | torch.device) -> UNet | SRUNet:
-    """Instantiates a UNet or a SRUNet, resuming model weights if provided"""
-    if cfg.model.name == 'unet':
-        generator = UNet(
-            num_filters=cfg.model.num_filters,
-            use_batch_norm=cfg.model.use_batch_norm,
-            scale_factor=cfg.params.scale_factor,
-        )
-    elif cfg.model.name == 'srunet':
-        generator = SRUNet(
-            num_filters=cfg.model.num_filters,
-            use_batch_norm=cfg.model.use_batch_norm,
-            scale_factor=cfg.params.scale_factor,
-        )
-    else:
+def set_up_generator(
+    cfg: Gifnoc, device: str | torch.device
+) -> torch.nn.Module:
+    """Inits a generator resuming model weights if provided."""
+
+    generators = {'unet': UNet, 'srunet': SRUNet}
+    if cfg.model.name not in generators:
         raise ValueError(f"`{cfg.model.name=}`, choose in {'unet', 'srunet'}.")
 
+    generator: torch.nn.Module = generators[cfg.model.name](
+        num_filters=cfg.model.num_filters,
+        use_batch_norm=cfg.model.use_batch_norm,
+        scale_factor=cfg.params.scale_factor,
+    )
     generator.to(device)
+
     if cfg.model.ckpt_path_to_resume:
         print(f'>>> Resuming from {cfg.model.ckpt_path_to_resume}')
         generator.load_state_dict(

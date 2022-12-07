@@ -64,7 +64,7 @@ def generate_unet_block_sequence(
     out_channels: int,
     use_batch_norm: bool = False,
     num_blocks: int = 2,
-) -> torch.Tensor:
+) -> torch.nn.Module:
     """Generates a sequence of UNet blocks.
 
     Args:
@@ -74,7 +74,7 @@ def generate_unet_block_sequence(
         num_blocks (int, optional): num of UNet blocks. Defaults to 2.
 
     Returns:
-        torch.Tensor: tensor of shape (*, out_channels, ih, iw).
+        torch.nn.Module: a sequence of UNet blocks.
     """
     return torch.nn.Sequential(
         *(

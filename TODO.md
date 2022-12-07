@@ -29,6 +29,7 @@
 ---
 
 ## medium priority
+- original frames in .png instead of .jpg
 - check structural reparametrization in DiracNets and RepVGG
 - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
 
