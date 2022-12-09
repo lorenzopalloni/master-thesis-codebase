@@ -217,26 +217,18 @@ def run_experiment(
 
 if __name__ == "__main__":
     default_cfg = get_default_config()
-    default_cfg.params.limit_train_batches = 2
-    default_cfg.params.limit_val_batches = 2
-    default_cfg.params.num_epochs = 2
+    # default_cfg.params.limit_train_batches = 2
+    # default_cfg.params.limit_val_batches = 2
+    # default_cfg.params.num_epochs = 2
 
-    # unet_ckpt = Path(
-    #     default_cfg.paths.artifacts_dir,
-    #     '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth'
-    # )
-    # srunet_ckpt = Path(cfg.paths.artifacts_dir, '/checkpoints/')
-
-    # run_experiment(
-    #     cfg=default_cfg,
-    #     model_name='unet',
-    #     experiment_name='UNet experiment',
-    #     ckpt_path_to_resume=unet_ckpt,
-    # )
+    run_experiment(
+        cfg=default_cfg,
+        model_name='unet',
+        experiment_name='UNet experiment',
+    )
 
     run_experiment(
         cfg=default_cfg,
         model_name='srunet',
         experiment_name='SRUNet experiment',
-        # ckpt_path_to_resume=srunet_ckpt,
     )
