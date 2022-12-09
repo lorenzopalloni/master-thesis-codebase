@@ -224,7 +224,7 @@ if __name__ == '__main__':
 
     srunet_ckpt_path = Path(
         best_checkpoints_dir,
-        "2022_12_07_srunet.pth",
+        "2022_12_09_srunet.pth",
     )
 
     default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path

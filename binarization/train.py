@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import lpips
 import mlflow
 import piq
 import torch
@@ -14,11 +13,11 @@ from binarization.config import Gifnoc, get_default_config
 from binarization.dataset import get_train_batches, get_val_batches
 from binarization.models import Discriminator
 from binarization.traintools import (
+    CustomLPIPS,
     set_up_checkpoints_dir,
     set_up_cuda_device,
     set_up_generator,
 )
-from binarization.vaccaro import pytorch_ssim
 
 
 def run_training(cfg: Gifnoc):
@@ -26,7 +25,7 @@ def run_training(cfg: Gifnoc):
 
     checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
 
-    device = set_up_cuda_device(device_id=1, verbose=True)
+    device = set_up_cuda_device(device_id=0, verbose=True)
 
     gen = set_up_generator(cfg=cfg, device=device)
     dis = Discriminator()
@@ -35,9 +34,9 @@ def run_training(cfg: Gifnoc):
     gen_optim = torch.optim.Adam(lr=cfg.params.gen_lr, params=gen.parameters())
     dis_optim = torch.optim.Adam(lr=cfg.params.dis_lr, params=dis.parameters())
 
-    ssim_op = pytorch_ssim.SSIM()  # piq.SSIMLoss()
-    lpips_vgg_loss_op = lpips.LPIPS(net='vgg', version='0.1')
-    lpips_alex_metric_op = lpips.LPIPS(net='alex', version='0.1')
+    ssim_loss_op = piq.SSIMLoss()
+    lpips_vgg_loss_op = CustomLPIPS(net='vgg')
+    lpips_alex_metric_op = CustomLPIPS(net='alex')
     bce_loss_op = torch.nn.BCELoss()
 
     lpips_vgg_loss_op.to(device)
@@ -70,7 +69,7 @@ def run_training(cfg: Gifnoc):
 
             original = original.to(device)
             compressed = compressed.to(device)
-            generated = gen(compressed)  # maybe clip it in [0, 1]
+            generated = gen(compressed)
             pred_original = dis(original)
 
             loss_true = bce_loss_op(
@@ -93,7 +92,7 @@ def run_training(cfg: Gifnoc):
             gen_optim.zero_grad()
 
             loss_lpips = lpips_vgg_loss_op(generated, original).mean()
-            loss_ssim = 1.0 - ssim_op(generated, original)
+            loss_ssim = 1.0 - ssim_loss_op(generated, original)
             pred_generated = dis(generated)
             loss_bce = bce_loss_op(
                 pred_generated, torch.ones_like(pred_generated)
@@ -153,14 +152,14 @@ def run_training(cfg: Gifnoc):
             compressed_val = compressed_val.to(device)
             gen.eval()
             with torch.no_grad():
-                generated_val = gen(compressed_val).clip(0, 1)
+                generated_val = gen(compressed_val)
                 metrics_val: dict[str, int | float] = {}
                 metrics_val['lpips_alex_val'] = (
                     lpips_alex_metric_op(generated_val, original_val)
                     .mean()
                     .item()
                 )
-                metrics_val['ssim_val'] = ssim_op(
+                metrics_val['ssim_val'] = ssim_loss_op(
                     generated_val, original_val
                 ).item()
                 metrics_val['psnr_val'] = piq.psnr(
@@ -185,6 +184,7 @@ def run_training(cfg: Gifnoc):
         ##################################################################
         # training_epoch_end - END
     mlflow.log_artifacts(checkpoints_dir)
+
 
 def run_experiment(
     cfg: Gifnoc,
@@ -214,16 +214,17 @@ def run_experiment(
         mlflow.log_params(cfg.model.stringify())
         run_training(cfg)
 
+
 if __name__ == "__main__":
     default_cfg = get_default_config()
-    # default_cfg.params.limit_train_batches = 2
-    # default_cfg.params.limit_val_batches = 2
-    # default_cfg.params.num_epochs = 2
+    default_cfg.params.limit_train_batches = 2
+    default_cfg.params.limit_val_batches = 2
+    default_cfg.params.num_epochs = 2
 
-    unet_ckpt = Path(
-        default_cfg.paths.artifacts_dir,
-        '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth'
-    )
+    # unet_ckpt = Path(
+    #     default_cfg.paths.artifacts_dir,
+    #     '/checkpoints/2022_09_30_06_31_40/unet_34_106400.pth'
+    # )
     # srunet_ckpt = Path(cfg.paths.artifacts_dir, '/checkpoints/')
 
     # run_experiment(

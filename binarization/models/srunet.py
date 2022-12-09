@@ -20,20 +20,20 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
     ):
         """SRUNet (Super-Resolution UNet).
 
-            Args:
-                in_channels (int, optional): channel dimension of the input.
-                    Defaults to 3.
-                out_channels (int, optional): channel dimension of the output.
-                    Defaults to 3.
-                num_filters (int, optional): number of filters in the first hidden
-                    layer. Each of the following layers gets twice the number of
-                    filters of its previous layer during encoding phase, and half
-                    the number of filters of its previous layer during decoding
-                    phase. Defaults to 64.
-                use_batch_norm (bool): flag for batch normalization. Defaults to
-                    False.
-                scale_factor (int): scaling factor. Defaults to 4.
-            """
+        Args:
+            in_channels (int, optional): channel dimension of the input.
+                Defaults to 3.
+            out_channels (int, optional): channel dimension of the output.
+                Defaults to 3.
+            num_filters (int, optional): number of filters in the first hidden
+                layer. Each of the following layers gets twice the number of
+                filters of its previous layer during encoding phase, and half
+                the number of filters of its previous layer during decoding
+                phase. Defaults to 64.
+            use_batch_norm (bool): flag for batch normalization. Defaults to
+                False.
+            scale_factor (int): scaling factor. Defaults to 4.
+        """
 
         super().__init__()
 
@@ -89,7 +89,7 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         )
         self.up1 = torch.nn.Conv2d(
             in_channels=num_filters // 2,
-            out_channels=(self.scale_factor ** 2) * out_channels,
+            out_channels=(self.scale_factor**2) * out_channels,
             kernel_size=1,
             padding=0,
         )
@@ -128,9 +128,9 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         out = self.pixel_shuffle(out)
 
         out += torch.nn.functional.interpolate(
-            batch[:, -self.out_channels :, :, :],
+            batch,
             scale_factor=self.scale_factor,
             mode='bicubic',
         )
 
-        return torch.clamp(out, min=-1, max=1)
+        return torch.clamp(out, min=0, max=1)

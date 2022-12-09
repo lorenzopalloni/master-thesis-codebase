@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
+from lpips import lpips
 
 from binarization.config import Gifnoc
 from binarization.models import SRUNet, UNet
@@ -68,3 +69,28 @@ def set_up_generator(
             )
         )
     return generator
+
+
+class CustomLPIPS(torch.nn.Module):
+    """Custom LPIPS."""
+
+    def __init__(self, net: str = 'vgg'):
+        """PyTorch custom module for LPIPS.
+
+        Args:
+        net (str): ['alex','vgg','squeeze'] are the base/trunk networks
+            available. Defaults to 'vgg'.
+        """
+        super().__init__()
+        self.lpips = lpips.LPIPS(net=net, version='0.1')
+        self.magic_mean = 0.4
+        self.magic_std = 0.2
+
+    def forward(
+        self, y_pred: torch.Tensor, y_true: torch.Tensor
+    ) -> torch.Tensor:
+        """Normalizes predictions in [-1, 1], and computes LPIPS."""
+        normalized_y_pred = (y_pred - self.magic_mean) / self.magic_std
+        normalized_y_pred = torch.clamp(normalized_y_pred, -1.0, 1.0)
+        ssim_op = self.lpips(normalized_y_pred, y_true)
+        return ssim_op

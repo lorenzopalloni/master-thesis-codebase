@@ -15,7 +15,7 @@ from binarization.datatools import (
     make_4times_downscalable,
     postprocess,
 )
-from binarization.traintools import set_up_generator
+from binarization.traintools import set_up_cuda_device, set_up_generator
 
 
 def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
@@ -31,7 +31,7 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
 
     save_dir.mkdir(exist_ok=True, parents=True)
 
-    device = 'cpu'  # set_up_cuda_device()
+    device = set_up_cuda_device(0)
 
     gen = set_up_generator(cfg, device=device)
     gen.to(device)
@@ -63,9 +63,8 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
                 compressed_image=compressed[i],
                 generated_image=generated[i],
             )
-            save_path = save_dir / f'validation_fig_{counter}.jpg'
             counter += 1
-            fig.savefig(save_path)
+            fig.savefig(save_dir / f'validation_fig_{counter}.jpg')
             plt.close(fig)  # close the current fig to prevent OOM issues
 
 
@@ -81,7 +80,7 @@ if __name__ == "__main__":
     srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_06_srunet.pth",
+        "2022_12_09_srunet.pth",
     )
 
     default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path

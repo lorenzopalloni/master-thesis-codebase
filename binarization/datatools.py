@@ -64,17 +64,17 @@ def random_crop_images(
     random_width = get_starting_random_position(width, patch_size)
     random_height = get_starting_random_position(height, patch_size)
 
-    compressed_image_positions = (
+    compressed_image_positions = [
         random_width,
         random_height,
         random_width + patch_size,
         random_height + patch_size,
-    )
+    ]
     # scale positions for the original image
-    original_image_positions = (
+    original_image_positions = [
         compressed_position * scale_factor
         for compressed_position in compressed_image_positions
-    )
+    ]
     original_patch = original_image.crop(original_image_positions)
     compressed_patch = compressed_image.crop(compressed_image_positions)
     return original_patch, compressed_patch
@@ -240,31 +240,14 @@ def estimate_n_batches_per_buffer(
     patch_size: int = 96,
 ) -> int:
     """Roughly estimates a good number of batches per buffer."""
-    average_patches_per_image = round((
-        compressed_image_width * compressed_image_height
-    ) / (patch_size**2))  # 56
+    average_patches_per_image = round(
+        (compressed_image_width * compressed_image_height) / (patch_size**2)
+    )  # 56
     average_available_patches = buffer_size * average_patches_per_image
     n_batches_per_buffer = round(
         (average_available_patches / factor) / batch_size
     )
     return n_batches_per_buffer
-
-
-def save_with_cv2(tensor_img: torch.Tensor, path: Path) -> None:
-    """Saves an image with cv2."""
-    tensor_img = inv_min_max_scaler(tensor_img.squeeze(0))
-    numpy_img = np.transpose(tensor_img.cpu().numpy(), (1, 2, 0)) * 255
-    numpy_img = cv2.cvtColor(numpy_img, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(path, numpy_img)
-
-
-def numpy_to_tensor(numpy_img: npt.NDArray[np.uint8]) -> torch.Tensor:
-    """Casts an array from numpy to torch."""
-    scaled_numpy_img: npt.NDArray[np.float64] = numpy_img / 255
-    tensor_img = torch.Tensor(scaled_numpy_img).cuda()
-    tensor_img = tensor_img.permute(2, 0, 1).unsqueeze(0)
-    tensor_img = min_max_scaler(tensor_img)
-    return tensor_img
 
 
 def tensor_to_numpy(tensor_img: torch.Tensor) -> npt.NDArray[np.uint8]:

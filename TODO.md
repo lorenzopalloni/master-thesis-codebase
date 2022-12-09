@@ -12,7 +12,10 @@
 - DONE - be able to train SRUNet
 
 ## high priority
-- fix normalization ([0, 1] -> [-1, 1])
+- DONE - fix normalization ([0, 1] -> [-1, 1])
+- DONE - fix clamp's
+- DONE - fix RGB -> BGR removing conversions
+- fix any bug caused by the previous three points
 
 - evaluate with `eval_image.py` both models
 - evaluate with `eval_video.py` both models
