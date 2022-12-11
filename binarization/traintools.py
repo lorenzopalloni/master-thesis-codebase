@@ -82,7 +82,7 @@ class CustomLPIPS(torch.nn.Module):
             available. Defaults to 'vgg'.
         """
         super().__init__()
-        self.lpips = lpips.LPIPS(net=net, version='0.1')
+        self.lpips = lpips.LPIPS(net=net, version='0.1', verbose=False)
         self.magic_mean = 0.4
         self.magic_std = 0.2
 
