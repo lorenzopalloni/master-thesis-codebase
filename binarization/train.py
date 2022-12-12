@@ -9,7 +9,7 @@ import piq
 import torch
 from tqdm import tqdm
 
-from binarization.config import Gifnoc, get_default_config
+from binarization.config import Gifnoc, get_default_config, parse_args
 from binarization.dataset import get_train_batches, get_val_batches
 from binarization.models import Discriminator
 from binarization.traintools import (
@@ -20,12 +20,12 @@ from binarization.traintools import (
 )
 
 
-def run_training(cfg: Gifnoc):
+def run_training(cfg: Gifnoc):  # pylint: disable=too-many-locals
     """Launches a super-resolution model training."""
 
     checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
 
-    device = set_up_cuda_device(device_id=0, verbose=True)
+    device = set_up_cuda_device(device_id=cfg.params.device, verbose=True)
 
     gen = set_up_generator(cfg=cfg, device=device)
     dis = Discriminator()
@@ -80,7 +80,7 @@ def run_training(cfg: Gifnoc):
                 pred_generated, torch.zeros_like(pred_generated)
             )
 
-            loss_dis = (loss_true + loss_fake) * 0.5
+            loss_dis = (loss_true + loss_fake) / 2.0
 
             loss_dis.backward()
             dis_optim.step()
@@ -92,7 +92,7 @@ def run_training(cfg: Gifnoc):
             gen_optim.zero_grad()
 
             loss_lpips = lpips_vgg_loss_op(generated, original).mean()
-            loss_ssim = 1.0 - ssim_loss_op(generated, original)
+            loss_ssim = ssim_loss_op(generated, original)
             pred_generated = dis(generated)
             loss_bce = bce_loss_op(
                 pred_generated, torch.ones_like(pred_generated)
@@ -188,22 +188,13 @@ def run_training(cfg: Gifnoc):
 
 def run_experiment(
     cfg: Gifnoc,
-    model_name: str,
-    experiment_name: str,
-    ckpt_path_to_resume: Path | None = None,
 ) -> None:
     """Launches an mlflow experiment.
 
     Args:
         cfg (Gifnoc): a valid configuration object.
-        model_name (str): choose in ('unet', 'srunet').
-        experiment_name (str): name of the mlflow experiment.
-        ckpt_path_to_resume (Union[Path, None], optional): checkpoint path
-            to (trained) model weights. Defaults to None.
     """
-    cfg.model.name = model_name
-    cfg.model.ckpt_path_to_resume = ckpt_path_to_resume
-
+    experiment_name = cfg.model.name.title()
     mlflow.set_tracking_uri(cfg.paths.mlruns_dir.as_uri())
     experiment = mlflow.set_experiment(experiment_name)
     with mlflow.start_run(
@@ -217,18 +208,18 @@ def run_experiment(
 
 if __name__ == "__main__":
     default_cfg = get_default_config()
-    # default_cfg.params.limit_train_batches = 2
-    # default_cfg.params.limit_val_batches = 2
+
+    # default_cfg.params.limit_train_batches = 500
+    # default_cfg.params.limit_val_batches = 30
     # default_cfg.params.num_epochs = 2
+    # default_cfg.params.batch_size = 4
+
+    args = parse_args(cfg=default_cfg)
+
+    default_cfg.model.name = args.model_name
+    default_cfg.params.device = args.device
+    default_cfg.model.ckpt_path_to_resume = args.ckpt_path_to_resume
 
     run_experiment(
         cfg=default_cfg,
-        model_name='unet',
-        experiment_name='UNet experiment',
-    )
-
-    run_experiment(
-        cfg=default_cfg,
-        model_name='srunet',
-        experiment_name='SRUNet experiment',
     )

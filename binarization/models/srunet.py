@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+import torch.nn.functional as F
 
 from binarization.models.common import generate_unet_block_sequence
 
@@ -34,6 +35,7 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
                 False.
             scale_factor (int): scaling factor. Defaults to 4.
         """
+        assert scale_factor == int(scale_factor) and scale_factor > 1
 
         super().__init__()
 
@@ -66,8 +68,7 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         )
 
         self.maxpool = torch.nn.MaxPool2d(2)
-
-        self.upsample = torch.nn.Upsample(scale_factor=2, mode='bilinear')
+        self.upsample = torch.nn.Upsample(scale_factor=2.0, mode='bilinear')
 
         self.up4 = generate_unet_block_sequence(
             in_channels=num_filters + num_filters,
@@ -95,7 +96,7 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         )
         self.pixel_shuffle = torch.nn.PixelShuffle(self.scale_factor)
 
-    def forward(self, batch):
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
         """SRUNet forward method."""
         out = batch
 
@@ -127,9 +128,9 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
 
         out = self.pixel_shuffle(out)
 
-        out += torch.nn.functional.interpolate(
+        out += F.interpolate(
             batch,
-            scale_factor=self.scale_factor,
+            scale_factor=float(self.scale_factor),
             mode='bicubic',
         )
 

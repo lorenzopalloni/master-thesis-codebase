@@ -1,4 +1,4 @@
-"""Implementation of a UNet model to generate super-resolution images."""
+"""UNet model to generate super-resolution images."""
 
 from __future__ import annotations
 

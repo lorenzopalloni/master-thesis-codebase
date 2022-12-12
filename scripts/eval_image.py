@@ -70,21 +70,30 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
 
 if __name__ == "__main__":
     default_cfg = get_default_config()
+    default_cfg.params.buffer_size = 1
 
-    # unet_ckpt_path = Path(
-    #     default_cfg.paths.artifacts_dir,
-    #     "checkpoints",
-    #     "2022_11_15_07_43_30/unet_2_191268.pth",
-    # )
+    unet_ckpt_path = Path(
+        default_cfg.paths.artifacts_dir,
+        # "best_checkpoints",
+        # "2022_12_11_unet_0_63756.pth",
+        "checkpoints",
+        "2022_12_11_16_19_40",
+        "unet_1_62.pth",
+    )
 
     srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
-        "best_checkpoints",
-        "2022_12_09_srunet.pth",
+        # "best_checkpoints",
+        # "2022_12_11_srunet_0_39999.pth",
+        "checkpoints",
+        "2022_12_11_16_20_19",
+        "srunet_1_62.pth",
     )
 
-    default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
-    default_cfg.params.buffer_size = 1
-    default_cfg.model.name = 'srunet'
+    default_cfg.model.ckpt_path_to_resume = unet_ckpt_path
+    default_cfg.model.name = 'unet'
+
+    # default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
+    # default_cfg.model.name = 'srunet'
 
     eval_images(default_cfg, n_evaluations=128)

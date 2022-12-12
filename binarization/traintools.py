@@ -84,13 +84,14 @@ class CustomLPIPS(torch.nn.Module):
         super().__init__()
         self.lpips = lpips.LPIPS(net=net, version='0.1', verbose=False)
         self.magic_mean = 0.4
-        self.magic_std = 0.2
 
     def forward(
         self, y_pred: torch.Tensor, y_true: torch.Tensor
     ) -> torch.Tensor:
-        """Normalizes predictions in [-1, 1], and computes LPIPS."""
-        normalized_y_pred = (y_pred - self.magic_mean) / self.magic_std
+        """Normalizes in [-1, 1], and computes LPIPS."""
+        normalized_y_pred = y_pred - self.magic_mean
         normalized_y_pred = torch.clamp(normalized_y_pred, -1.0, 1.0)
-        ssim_op = self.lpips(normalized_y_pred, y_true)
+        normalized_y_true = y_true - self.magic_mean
+        normalized_y_true = torch.clamp(normalized_y_true, -1.0, 1.0)
+        ssim_op = self.lpips(normalized_y_pred, normalized_y_true)
         return ssim_op

@@ -1,7 +1,7 @@
 # TODO List
 
 > resume from branch 'normalization'
-> have a look at **normalization**
+> FIX MEGABUG
 
 > [standby] resume with: `ssh solaris && screen -r binarization`
 
@@ -12,6 +12,7 @@
 - DONE - be able to train SRUNet
 
 ## high priority
+
 - DONE - fix normalization ([0, 1] -> [-1, 1])
 - DONE - fix clamp's
 - DONE - fix RGB -> BGR removing conversions
