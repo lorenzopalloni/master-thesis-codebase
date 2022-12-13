@@ -215,7 +215,7 @@ def eval_video(
         writer.writer.isOpened()
 
 
-if __name__ == '__main__':  # pylint: disable=duplicate-code
+if __name__ == '__main__':
     default_cfg = get_default_config()
     default_cfg.params.buffer_size = 1
     unet_cfg = default_cfg.copy()
