@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,11 +30,12 @@ class ParamsConfig:
     limit_val_batches: int | None = None
     save_ckpt_every: int = 20_000
     num_workers: int = 1
-    num_epochs: int = 3
+    num_epochs: int = 1
     lpips_weight: float = 1e-0  # LPIPS weight
-    ssim_weight: float = 1e-0  # SSIM weight
+    ssim_weight: float = 5e-1  # SSIM weight
     adversarial_loss_weight: float = 1e-3  # Adversarial loss weight
     scale_factor: int = 4
+    device: int | str = 0
 
 
 @dataclass
@@ -59,7 +61,28 @@ def get_default_config() -> Gifnoc:
     return Gifnoc.from_dataclass(DefaultConfig())
 
 
+def parse_args(cfg: Gifnoc) -> Namespace:
+    """Parses user-provided arguments."""
+    parser = ArgumentParser()
+    parser.add_argument(
+        '--model_name',
+        type=str,
+        default=cfg.model.name,
+        choices=['unet', 'srunet'],
+    )
+    parser.add_argument('--device', type=int, default=cfg.params.device)
+    parser.add_argument('--ckpt_path_to_resume', type=Path, default=None)
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == "__main__":
     paths = PathsConfig()
     print(paths)
     print(Gifnoc.from_dataclass(paths))
+
+    default_cfg = get_default_config()
+    default_cfg.model.name = 'unet'
+
+    example_args = parse_args(cfg=default_cfg)
+    print(example_args)

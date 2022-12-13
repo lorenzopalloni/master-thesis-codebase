@@ -15,7 +15,7 @@ from binarization.datatools import (
     make_4times_downscalable,
     postprocess,
 )
-from binarization.traintools import set_up_generator
+from binarization.traintools import set_up_cuda_device, set_up_generator
 
 
 def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
@@ -31,7 +31,7 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
 
     save_dir.mkdir(exist_ok=True, parents=True)
 
-    device = 'cpu'  # set_up_cuda_device()
+    device = set_up_cuda_device(0)
 
     gen = set_up_generator(cfg, device=device)
     gen.to(device)
@@ -63,29 +63,37 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
                 compressed_image=compressed[i],
                 generated_image=generated[i],
             )
-            save_path = save_dir / f'validation_fig_{counter}.jpg'
             counter += 1
-            fig.savefig(save_path)
+            fig.savefig(save_dir / f'validation_fig_{counter}.jpg')
             plt.close(fig)  # close the current fig to prevent OOM issues
 
 
 if __name__ == "__main__":
     default_cfg = get_default_config()
+    default_cfg.params.buffer_size = 1
 
-    # unet_ckpt_path = Path(
-    #     default_cfg.paths.artifacts_dir,
-    #     "checkpoints",
-    #     "2022_11_15_07_43_30/unet_2_191268.pth",
-    # )
+    unet_ckpt_path = Path(
+        default_cfg.paths.artifacts_dir,
+        "best_checkpoints",
+        "2022_12_13_unet_0_39999.pth",
+    )
 
     srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_06_srunet.pth",
+        "2022_12_13_srunet_0_39999.pth",
     )
+    unet_cfg = default_cfg.copy()
+    srunet_cfg = default_cfg.copy()
 
-    default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
-    default_cfg.params.buffer_size = 1
-    default_cfg.model.name = 'srunet'
+    unet_cfg.model.ckpt_path_to_resume = unet_ckpt_path
+    unet_cfg.model.name = 'unet'
 
-    eval_images(default_cfg, n_evaluations=128)
+    srunet_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
+    srunet_cfg.model.name = 'srunet'
+
+    assert unet_cfg.model.name == 'unet'
+
+    max_n_frames = 128
+    eval_images(unet_cfg, n_evaluations=max_n_frames)
+    eval_images(srunet_cfg, n_evaluations=max_n_frames)

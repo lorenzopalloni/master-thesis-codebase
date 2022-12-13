@@ -1,4 +1,4 @@
-"""Implementation of a UNet model to generate super-resolution images."""
+"""UNet model to generate super-resolution images."""
 
 from __future__ import annotations
 
@@ -130,9 +130,9 @@ class UNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         out = self.pixel_shuffle(out)
 
         out += F.interpolate(
-            batch[:, -self.out_channels :, :, :],  # RGB -> BGR
+            batch,
             scale_factor=float(self.scale_factor),
             mode='bicubic',
         )
 
-        return torch.clamp(out, min=-1, max=1)
+        return torch.clamp(out, min=0, max=1)

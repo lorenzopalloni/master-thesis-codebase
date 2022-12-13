@@ -38,6 +38,7 @@ class WriteToVideo:
         scale_factor: int = 4,
         enable_show_compressed: bool = True,
         enable_crop: bool = True,
+        save_path: Path = Path("rendered.mp4"),
     ):
         adjusted_width = make_4times_divisible(width)
         adjusted_height = make_4times_divisible(height)
@@ -51,7 +52,7 @@ class WriteToVideo:
         self.frame_height = adjusted_height * scale_factor
 
         self.writer = cv2.VideoWriter(
-            filename='rendered.mp4',
+            filename=Path(save_path).as_posix(),
             fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
             fps=30,
             frameSize=(self.frame_width, self.frame_height),
@@ -106,7 +107,7 @@ def eval_video(
     enable_show_compressed: bool = True,
     enable_crop: bool = True,
     enable_write_to_video: bool = False,
-):
+):  # pylint: disable=too-many-locals
     """Upscales a compressed video with super-resolution.
 
     Args:
@@ -131,11 +132,15 @@ def eval_video(
 
     if enable_write_to_video:
         width, height = get_video_size(video_path)
+        save_path = (
+            cfg.paths.outputs_dir / f"{cfg.model.name}_{test_video_path.name}"
+        )
         writer = WriteToVideo(
             width=width,
             height=height,
             scale_factor=scale_factor,
             enable_show_compressed=enable_show_compressed,
+            save_path=save_path,
         )
 
     queue0: Queue = Queue(1)
@@ -202,49 +207,58 @@ def eval_video(
             except KeyboardInterrupt:
                 break
 
-        if enable_write_to_video:
-            writer.release()
-
     queue0.join()
     queue1.join()
+
+    if enable_write_to_video:
+        writer.release()
+        writer.writer.isOpened()
 
 
 if __name__ == '__main__':
     default_cfg = get_default_config()
-
-    best_checkpoints_dir = Path(
-        default_cfg.paths.artifacts_dir, "best_checkpoints"
-    )
+    default_cfg.params.buffer_size = 1
+    unet_cfg = default_cfg.copy()
+    srunet_cfg = default_cfg.copy()
 
     unet_ckpt_path = Path(
-        best_checkpoints_dir,
-        "2022_11_21_unet.pth",
+        default_cfg.paths.artifacts_dir,
+        "best_checkpoints",
+        "2022_12_13_unet_0_39999.pth",
     )
-    del unet_ckpt_path
 
     srunet_ckpt_path = Path(
-        best_checkpoints_dir,
-        "2022_12_07_srunet.pth",
+        default_cfg.paths.artifacts_dir,
+        "best_checkpoints",
+        "2022_12_13_srunet_0_39999.pth",
     )
 
-    default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
-    default_cfg.params.buffer_size = 1
-    default_cfg.model.name = 'srunet'
+    srunet_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
+    srunet_cfg.model.name = 'srunet'
+
+    unet_cfg.model.ckpt_path_to_resume = unet_ckpt_path
+    unet_cfg.model.name = 'unet'
 
     test_video_path = Path(
         default_cfg.paths.data_dir,
         'compressed_videos',
-        'old_town_cross_1080p50.mp4',
+        'in_to_tree_1080p50.mp4',
     )
 
-    homer_video_path = Path(
-        default_cfg.paths.project_dir,
-        "tests/assets/compressed_videos/homer_arch_512x372_120K.mp4",
-    )
-    del homer_video_path
+    # test_video_path = Path(
+    #     default_cfg.paths.project_dir,
+    #     "tests/assets/compressed_videos/homer_arch_512x372_120K.mp4",
+    # )
+
+    # eval_video(
+    #     cfg=unet_cfg,
+    #     video_path=test_video_path,
+    #     enable_show_compressed=True,
+    #     enable_write_to_video=True,
+    # )
 
     eval_video(
-        cfg=default_cfg,
+        cfg=srunet_cfg,
         video_path=test_video_path,
         enable_show_compressed=True,
         enable_write_to_video=True,
