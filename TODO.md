@@ -1,9 +1,6 @@
 # TODO List
 
-> resume from branch 'normalization'
-> FIX MEGABUG
-
-> [standby] resume with: `ssh solaris && screen -r binarization`
+> resume with: `ssh solaris && screen -r binarization`
 
 ## recently DONEs
 - DONE - refactor UNet
@@ -11,30 +8,28 @@
 - DONE - refactor SRUNet
 - DONE - be able to train SRUNet
 
-## high priority
-
 - DONE - fix normalization ([0, 1] -> [-1, 1])
 - DONE - fix clamp's
 - DONE - fix RGB -> BGR removing conversions
-- fix any bug caused by the previous three points
+- DONE - fix any bug caused by the previous three points
 
-- evaluate with `eval_image.py` both models
-- evaluate with `eval_video.py` both models
+- DONE - be able to evaluate with `eval_image.py` both models
+- DONE - be able to evaluate with `eval_video.py` both models
+
+## high priority
+
 - implement binarized UNet
 - train binarized UNet
 - implement binarized SRUNet
 - train binarized SRUNet
 - evaluate them all
 
-- train with/without ssim
-
-- understand why your way of including ssim was so bad for the training
 ---
 
 ## medium priority
 - original frames in .png instead of .jpg
 - check structural reparametrization in DiracNets and RepVGG
-- check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
+- DONE - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
 
 ---
 

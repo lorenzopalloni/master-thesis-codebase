@@ -74,26 +74,26 @@ if __name__ == "__main__":
 
     unet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
-        # "best_checkpoints",
-        # "2022_12_11_unet_0_63756.pth",
-        "checkpoints",
-        "2022_12_11_16_19_40",
-        "unet_1_62.pth",
+        "best_checkpoints",
+        "2022_12_13_unet_0_39999.pth",
     )
 
     srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
-        # "best_checkpoints",
-        # "2022_12_11_srunet_0_39999.pth",
-        "checkpoints",
-        "2022_12_11_16_20_19",
-        "srunet_1_62.pth",
+        "best_checkpoints",
+        "2022_12_13_srunet_0_39999.pth",
     )
+    unet_cfg = default_cfg.copy()
+    srunet_cfg = default_cfg.copy()
 
-    default_cfg.model.ckpt_path_to_resume = unet_ckpt_path
-    default_cfg.model.name = 'unet'
+    unet_cfg.model.ckpt_path_to_resume = unet_ckpt_path
+    unet_cfg.model.name = 'unet'
 
-    # default_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
-    # default_cfg.model.name = 'srunet'
+    srunet_cfg.model.ckpt_path_to_resume = srunet_ckpt_path
+    srunet_cfg.model.name = 'srunet'
 
-    eval_images(default_cfg, n_evaluations=128)
+    assert unet_cfg.model.name == 'unet'
+
+    max_n_frames = 128
+    eval_images(unet_cfg, n_evaluations=max_n_frames)
+    eval_images(srunet_cfg, n_evaluations=max_n_frames)
