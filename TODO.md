@@ -2,6 +2,8 @@
 
 > resume with: `ssh solaris && screen -r binarization`
 
+- in `fast-sr-unet/evaluate_model.py` there is a ~260-lines-of-code function really messed up that can be useful as a reference to evaluate different metrics on low vs high quality videos
+
 ## recently DONEs
 - DONE - refactor UNet
 - DONE - refactor `binarization/models/common.py`
@@ -19,6 +21,7 @@
 ## high priority
 
 - implement binarized UNet
+- implement an evaluation function taking a cue from `fede-vaccaro/fast-sr-unet/evaluation_model.py`
 - train binarized UNet
 - implement binarized SRUNet
 - train binarized SRUNet
