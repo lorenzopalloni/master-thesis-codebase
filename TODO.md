@@ -18,6 +18,8 @@
 - DONE - be able to evaluate with `eval_image.py` both models
 - DONE - be able to evaluate with `eval_video.py` both models
 
+- DONE - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
+
 ## high priority
 
 - implement binarized UNet
@@ -32,7 +34,6 @@
 ## medium priority
 - original frames in .png instead of .jpg
 - check structural reparametrization in DiracNets and RepVGG
-- DONE - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
 
 ---
 
@@ -119,3 +120,4 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - run `./scripts/video_preprocessing.py -i data -s 4`
 - DONE - train UNet with `scale_factor == 4`
 - DONE - implement `eval_video.py` (video + timing) while UNet is training
+
