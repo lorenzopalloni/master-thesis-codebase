@@ -131,7 +131,7 @@ class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes
         out += F.interpolate(
             batch,
             scale_factor=float(self.scale_factor),
-            mode='bicubic',
+            mode='bilinear',
         )
 
         return torch.clamp(out, min=0, max=1)

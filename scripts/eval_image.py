@@ -33,18 +33,18 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
 
     device = set_up_cuda_device(0)
 
-    gen = set_up_generator(cfg, device=device)
-    gen.to(device)
+    # gen = set_up_generator(cfg, device=device)
+    import torch_tensorrt
+
+    gen = torch.jit.load("trt_ts_module.ts").to(device).eval()
 
     test_batches = get_test_batches(cfg)
-    progress_bar = tqdm(test_batches)
+    progress_bar = tqdm(test_batches, total=n_evaluations)
 
-    counter = 0
     for step_id, (original, compressed) in enumerate(progress_bar):
         if n_evaluations and step_id > n_evaluations - 1:
             break
 
-        original = original.to(device)
         compressed = compressed.to(device)
         compressed = make_4times_downscalable(compressed)
 
@@ -52,7 +52,6 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
         with torch.no_grad():
             generated = gen(compressed)
 
-        original = original.cpu()
         compressed = compressed.cpu()
         generated = generated.cpu()
         generated = postprocess(original=original, generated=generated)
@@ -63,8 +62,7 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
                 compressed_image=compressed[i],
                 generated_image=generated[i],
             )
-            counter += 1
-            fig.savefig(save_dir / f'validation_fig_{counter}.jpg')
+            fig.savefig(save_dir / f'f{step_id:05d}_validation_fig.jpg')
             plt.close(fig)  # close the current fig to prevent OOM issues
 
 
@@ -75,13 +73,13 @@ if __name__ == "__main__":
     unet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_13_unet_0_39999.pth",
+        "2022_12_19_unet_4_318780.pth",
     )
 
     srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_13_srunet_0_39999.pth",
+        "2022_12_19_srunet_4_318780.pth",
     )
     unet_cfg = default_cfg.copy()
     srunet_cfg = default_cfg.copy()
@@ -94,6 +92,57 @@ if __name__ == "__main__":
 
     assert unet_cfg.model.name == 'unet'
 
-    max_n_frames = 128
-    eval_images(unet_cfg, n_evaluations=max_n_frames)
-    eval_images(srunet_cfg, n_evaluations=max_n_frames)
+    max_n_frames = 10
+    # eval_images(unet_cfg, n_evaluations=max_n_frames)
+    # eval_images(srunet_cfg, n_evaluations=max_n_frames)
+
+    import time
+
+    import numpy as np
+    import torch.backends.cudnn as cudnn
+
+    cudnn.benchmark = True
+
+    def benchmark(
+        model,
+        input_shape=(1, 3, 288, 480),
+        dtype='fp32',
+        nwarmup=10,
+        nruns=300,
+    ):
+        input_data = torch.randn(input_shape)
+        input_data = input_data.to("cuda")
+        if dtype == 'fp16':
+            input_data = input_data.half()
+
+        print("Warm up ...")
+        with torch.no_grad():
+            for _ in range(nwarmup):
+                _ = model(input_data)
+        torch.cuda.synchronize()
+
+        print("Start timing ...")
+        timings = []
+        with torch.no_grad():
+            for i in range(1, nruns + 1):
+                start_time = time.perf_counter_ns()
+                output = model(input_data)
+                torch.cuda.synchronize()
+                end_time = time.perf_counter_ns()
+                timings.append(end_time - start_time)
+                if i % (nruns // 10) == 0:
+                    print(
+                        f"# {i}/{nruns}, avg batch time: "
+                        f"{np.mean(timings) / 1e+9:.6f} [s]."
+                    )
+
+        print("Input shape:", input_data.size())
+        print("Output shape:", output.shape)
+        print(f"Average batch time: {np.mean(timings) / 1e+9:.6f} [s]")
+
+    old_unet = set_up_generator(srunet_cfg, device="cuda").eval()
+    benchmark(old_unet)
+    import torch_tensorrt
+
+    quant_unet = torch.jit.load("trt_ts_module.ts").eval()
+    benchmark(quant_unet)

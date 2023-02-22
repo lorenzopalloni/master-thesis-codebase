@@ -11,10 +11,22 @@ next steps:
  - read white paper by Qualcomm
 
 ## Monday, 16 January 2023
-- today I've done nothing, last week I did nothing: I think it's time to organize my work in a different way.
+- today I've done nothing, last week I did nothing: I think it's time to organize my work in a different way
 - I should buy a fucking desk, and do at least a deep-work block per day
 
 ## Thursday, 19 January 2023
 - I've started studying alibabacloud-quantization-networks repo
 - I should need another couple of sessions to read the code, then I should be able to start implementing something for the UNet on my own
 
+## Tuesday, 7 February 2023
+- too slow bruh, need to speed up
+- I'm going to reimplement our current UNet architecture using XNOR-Net blocks, and its training/evaluation procedures
+
+## Tuesday, 14 February 2023
+- I've changed my mind, now I'm going to test if I can implement a PTQ on UNet using the Torch-TensorRT framework
+
+## Tuesday, 22 February 2023
+- Compiled UNet and SRUNet with `pytorch_tensorrt` for inference
+- Tested speed up gain given by compiled models
+- I think we're ready to start writing bruh
+- Only thing that misses is to understand a bit better tensorrt under the hood
