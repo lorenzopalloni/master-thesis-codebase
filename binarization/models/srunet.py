@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
-from binarization.models.common import generate_unet_block_sequence
+from binarization.models.modeltools import generate_unet_block_sequence
 
 
 class SRUNet(torch.nn.Module):  # pylint: disable=too-many-instance-attributes

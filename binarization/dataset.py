@@ -15,7 +15,7 @@ import torch
 import torchvision.transforms.functional as F
 from gifnoc import Gifnoc
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision.utils import Image
 
 from binarization.datatools import (
@@ -449,7 +449,9 @@ def get_batches(cfg):
 
 
 class CalibrationDataset(Dataset):
-    def __init__(self, cfg):
+    """Custom dataset for PTQ calibration of Torch-TensorRT."""
+
+    def __init__(self, cfg: Gifnoc):
         self.paired_paths = get_paired_paths(cfg=cfg, stage=Stage.VAL)
 
     def __len__(self) -> int:
@@ -460,3 +462,37 @@ class CalibrationDataset(Dataset):
         compressed_image = Image.open(compressed_path)
         scaled_tensor = min_max_scaler(F.pil_to_tensor(compressed_image))
         return make_4times_downscalable(scaled_tensor)
+
+
+def get_calibration_dataloader(
+    cfg: Gifnoc,
+    subset_size: int | None = 5,
+    random_seed: int | None = 42,
+) -> DataLoader:
+    """Returns a dataloader for PTQ calibration of Torch-TensorRT."""
+
+    calibration_dataset = CalibrationDataset(cfg)
+
+    dataset_size = len(calibration_dataset)
+    if subset_size is not None and subset_size < dataset_size:
+        if random_seed is not None:
+            np.random.seed(random_seed)
+            indices = np.random.choice(np.arange(dataset_size), subset_size)
+        else:
+            indices = np.arange(subset_size)
+        subset_calibration_dataset = Subset(
+            dataset=calibration_dataset, indices=indices.tolist()
+        )
+        calibration_dataloader = DataLoader(
+            dataset=subset_calibration_dataset,
+            batch_size=1,
+            shuffle=False,
+        )
+    else:
+        calibration_dataloader = DataLoader(
+            dataset=calibration_dataset,
+            batch_size=1,
+            shuffle=False,
+        )
+
+    return calibration_dataloader

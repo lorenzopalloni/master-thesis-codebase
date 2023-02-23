@@ -15,7 +15,7 @@ from binarization.datatools import (
     make_4times_downscalable,
     postprocess,
 )
-from binarization.traintools import set_up_cuda_device, set_up_generator
+from binarization.traintools import prepare_cuda_device, prepare_generator
 
 
 def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
@@ -31,9 +31,9 @@ def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
 
     save_dir.mkdir(exist_ok=True, parents=True)
 
-    device = set_up_cuda_device(0)
+    device = prepare_cuda_device(0)
 
-    # gen = set_up_generator(cfg, device=device)
+    # gen = prepare_generator(cfg, device=device)
     import torch_tensorrt
 
     gen = torch.jit.load("trt_ts_module.ts").to(device).eval()
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         print("Output shape:", output.shape)
         print(f"Average batch time: {np.mean(timings) / 1e+9:.6f} [s]")
 
-    old_unet = set_up_generator(srunet_cfg, device="cuda").eval()
+    old_unet = prepare_generator(srunet_cfg, device="cuda").eval()
     benchmark(old_unet)
     import torch_tensorrt
 

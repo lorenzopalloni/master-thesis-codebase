@@ -15,7 +15,7 @@ from binarization.datatools import (
     make_4times_downscalable,
     postprocess,
 )
-from binarization.traintools import set_up_cuda_device, set_up_generator
+from binarization.traintools import prepare_cuda_device, prepare_generator
 
 if __name__ == "__main__":
     user_cfg = get_default_config()
@@ -38,8 +38,8 @@ if __name__ == "__main__":
     save_dir = cfg.paths.outputs_dir / ckpt_path.stem
     save_dir.mkdir(exist_ok=True)
 
-    device = set_up_cuda_device(device_id=device_id)
-    gen = set_up_generator(user_cfg, device=device)
+    device = prepare_cuda_device(device_id=device_id)
+    gen = prepare_generator(user_cfg, device=device)
     # from binarization.models import UNet
     # gen = UNet()
 
