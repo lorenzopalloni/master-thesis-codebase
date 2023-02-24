@@ -122,6 +122,9 @@ def inv_make_4times_downscalable(
     original: torch.Tensor, generated: torch.Tensor
 ) -> torch.Tensor:
     """Crops as much as needed to invert `make_4times_downscalable`."""
+    # TODO: we don't need the original image as input here,
+    # it would be fine to give h/w of the original image
+    # and the compressed_image_made_downscalable.
     height_original, width_original = original.shape[-2], original.shape[-1]
     height_generated, width_generated = (
         generated.shape[-2],
@@ -149,6 +152,7 @@ def draw_validation_fig(
     compressed_image: torch.Tensor,
     generated_image: torch.Tensor,
     figsize: tuple[int, int] = (12, 5),
+    save_path: Path | None = None,
 ) -> plt.Figure:
     """Draws three images in a row with matplotlib."""
     original_image_pil = TF.to_pil_image(original_image)
@@ -167,6 +171,8 @@ def draw_validation_fig(
     fig.subplots_adjust(
         top=1.0, bottom=0.0, right=1.0, left=0.0, hspace=0.0, wspace=0.0
     )
+    if save_path is not None:
+        fig.savefig(save_path)
     return fig
 
 

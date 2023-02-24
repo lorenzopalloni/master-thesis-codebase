@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
-import torch_tensorrt  # mandatory for inference even without calling it
 from tqdm import tqdm
 
 from binarization.config import Gifnoc, get_default_config
@@ -19,27 +16,6 @@ from binarization.datatools import (
     postprocess,
 )
 from binarization.traintools import prepare_cuda_device, prepare_generator
-
-
-def super_resolution_on_image(gen, compressed):
-    gen.eval()
-    compressed = make_4times_downscalable(compressed)
-    with torch.no_grad():
-        generated = gen(compressed)
-    return generated
-
-
-        generated = postprocess(original=original, generated=generated)
-
-        if save_path is not None:
-            for i in range(original.shape[0]):
-                fig = draw_validation_fig(
-                    original_image=original[i],
-                    compressed_image=compressed[i],
-                    generated_image=generated[i],
-                )
-                fig.savefig(save_dir / f'f{step_id:05d}_validation_fig.jpg')
-                plt.close(fig)  # close the current fig to prevent OOM issues
 
 
 def eval_images(cfg: Gifnoc, n_evaluations: int | None = None):
@@ -120,6 +96,12 @@ if __name__ == "__main__":
     # eval_images(unet_cfg, n_evaluations=max_n_frames)
     # eval_images(srunet_cfg, n_evaluations=max_n_frames)
 
+    import time
+
+    import numpy as np
+    import torch.backends.cudnn as cudnn
+
+    cudnn.benchmark = True
 
     def benchmark(
         model,
@@ -128,9 +110,6 @@ if __name__ == "__main__":
         nwarmup=10,
         nruns=300,
     ):
-        import torch.backends.cudnn as cudnn
-        cudnn.benchmark = True
-
         input_data = torch.randn(input_shape)
         input_data = input_data.to("cuda")
         if dtype == 'fp16':
@@ -163,6 +142,7 @@ if __name__ == "__main__":
 
     old_unet = prepare_generator(srunet_cfg, device="cuda").eval()
     benchmark(old_unet)
+    import torch_tensorrt
 
     quant_unet = torch.jit.load("trt_ts_module.ts").eval()
     benchmark(quant_unet)
