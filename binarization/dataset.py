@@ -15,11 +15,14 @@ import torch
 import torchvision.transforms.functional as F
 from gifnoc import Gifnoc
 from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision.utils import Image
 
 from binarization.datatools import (
+    compose,
     list_directories,
     list_files,
+    make_4times_downscalable,
     min_max_scaler,
     random_crop_images,
 )
@@ -245,7 +248,9 @@ def get_paired_paths(cfg: Gifnoc, stage: Stage) -> list[tuple[Path, Path]]:
     in_paths = []
     for video_name in splits[stage.value]:
         out_frames_dir = Path(cfg.paths.original_frames_dir, video_name)
-        out_paths.extend(list_files(out_frames_dir, extensions=['.png', '.jpg']))
+        out_paths.extend(
+            list_files(out_frames_dir, extensions=['.png', '.jpg'])
+        )
         in_frames_dir = Path(cfg.paths.compressed_frames_dir, video_name)
         in_paths.extend(list_files(in_frames_dir, extensions=['.png', '.jpg']))
 
@@ -276,7 +281,7 @@ def default_val_pipe(
     original_image: PIL.Image.Image,
     compressed_image: PIL.Image.Image,
     scale_factor: int = 4,
-    random_seed: int = 42
+    random_seed: int = 42,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     np.random.seed(random_seed)  # crop at random positions but always the same
     original_patch, compressed_patch = random_crop_images(
@@ -297,10 +302,8 @@ def default_test_pipe(
     scale_factor: int = 4,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     del scale_factor
-    return (
-        min_max_scaler(F.pil_to_tensor(original_image)),
-        min_max_scaler(F.pil_to_tensor(compressed_image)),
-    )
+    pipe = compose(F.pil_to_tensor, min_max_scaler, make_4times_downscalable)
+    return F.pil_to_tensor(original_image), pipe(compressed_image)
 
 
 class BatchGenerator:
@@ -442,3 +445,55 @@ def get_batches(cfg):
         get_val_batches(cfg),
         get_test_batches(cfg),
     )
+
+
+class CalibrationDataset(Dataset):
+    """Custom dataset for PTQ calibration of Torch-TensorRT."""
+
+    def __init__(self, cfg: Gifnoc):
+        self.paired_paths = get_paired_paths(cfg=cfg, stage=Stage.VAL)
+
+    def __len__(self) -> int:
+        return len(self.paired_paths)
+
+    def __getitem__(self, index: int):
+        _, compressed_path = self.paired_paths[index]
+        compressed_image = Image.open(compressed_path)
+        pipe = compose(
+            F.pil_to_tensor, min_max_scaler, make_4times_downscalable
+        )
+        return pipe(compressed_image)
+
+
+def get_calibration_dataloader(
+    cfg: Gifnoc,
+    subset_size: int | None = 5,
+    random_seed: int | None = 42,
+) -> DataLoader:
+    """Returns a dataloader for PTQ calibration of Torch-TensorRT."""
+
+    calibration_dataset = CalibrationDataset(cfg)
+
+    dataset_size = len(calibration_dataset)
+    if subset_size is not None and subset_size < dataset_size:
+        if random_seed is not None:
+            np.random.seed(random_seed)
+            indices = np.random.choice(np.arange(dataset_size), subset_size)
+        else:
+            indices = np.arange(subset_size)
+        subset_calibration_dataset = Subset(
+            dataset=calibration_dataset, indices=indices.tolist()
+        )
+        calibration_dataloader = DataLoader(
+            dataset=subset_calibration_dataset,
+            batch_size=1,
+            shuffle=False,
+        )
+    else:
+        calibration_dataloader = DataLoader(
+            dataset=calibration_dataset,
+            batch_size=1,
+            shuffle=False,
+        )
+
+    return calibration_dataloader

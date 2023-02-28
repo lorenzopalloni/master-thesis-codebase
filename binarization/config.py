@@ -47,6 +47,7 @@ class PathsConfig:
     data_dir: Path = project_dir / "data"
     original_frames_dir: Path = data_dir / "original_frames"
     compressed_frames_dir: Path = data_dir / "compressed_frames"
+    trt_dir: Path = artifacts_dir / "trt"
 
 
 @dataclass

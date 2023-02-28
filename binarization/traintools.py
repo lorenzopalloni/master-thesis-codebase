@@ -12,7 +12,7 @@ from binarization.config import Gifnoc
 from binarization.models import SRUNet, UNet
 
 
-def set_up_cuda_device(device_id: int = 1, verbose: bool = False) -> str:
+def prepare_cuda_device(device_id: int = 0, verbose: bool = False) -> str:
     """Tries to set device id to `1` with 3 GPUs and to `0` with only one."""
     if not torch.cuda.is_available():
         raise ValueError("pytorch was not able to detect any GPU.")
@@ -37,7 +37,7 @@ def set_up_cuda_device(device_id: int = 1, verbose: bool = False) -> str:
     return f'cuda:{torch.cuda.current_device()}'
 
 
-def set_up_checkpoints_dir(artifacts_dir: Path) -> Path:
+def prepare_checkpoints_dir(artifacts_dir: Path) -> Path:
     """Sets up unique-time-related dirs for model checkpoints and runs"""
     str_now = datetime.now().strftime(r"%Y_%m_%d_%H_%M_%S")
     checkpoints_dir = Path(artifacts_dir, 'checkpoints', str_now)
@@ -45,7 +45,7 @@ def set_up_checkpoints_dir(artifacts_dir: Path) -> Path:
     return checkpoints_dir
 
 
-def set_up_generator(
+def prepare_generator(
     cfg: Gifnoc, device: str | torch.device
 ) -> torch.nn.Module:
     """Inits a generator resuming model weights if provided."""
@@ -59,6 +59,7 @@ def set_up_generator(
         use_batch_norm=cfg.model.use_batch_norm,
         scale_factor=cfg.params.scale_factor,
     )
+
     generator.to(device)
 
     if cfg.model.ckpt_path_to_resume:

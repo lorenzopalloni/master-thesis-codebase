@@ -14,20 +14,20 @@ from binarization.dataset import get_train_batches, get_val_batches
 from binarization.models import Discriminator
 from binarization.traintools import (
     CustomLPIPS,
-    set_up_checkpoints_dir,
-    set_up_cuda_device,
-    set_up_generator,
+    prepare_checkpoints_dir,
+    prepare_cuda_device,
+    prepare_generator,
 )
 
 
 def run_training(cfg: Gifnoc):  # pylint: disable=too-many-locals
     """Launches a super-resolution model training."""
 
-    checkpoints_dir = set_up_checkpoints_dir(cfg.paths.artifacts_dir)
+    checkpoints_dir = prepare_checkpoints_dir(cfg.paths.artifacts_dir)
 
-    device = set_up_cuda_device(device_id=cfg.params.device, verbose=True)
+    device = prepare_cuda_device(device_id=cfg.params.device, verbose=True)
 
-    gen = set_up_generator(cfg=cfg, device=device)
+    gen = prepare_generator(cfg=cfg, device=device)
     dis = Discriminator()
     dis.to(device)
 

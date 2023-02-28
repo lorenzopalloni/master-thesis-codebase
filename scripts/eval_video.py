@@ -23,7 +23,7 @@ from binarization.datatools import (
     min_max_scaler,
     tensor_to_numpy,
 )
-from binarization.traintools import set_up_cuda_device, set_up_generator
+from binarization.traintools import prepare_cuda_device, prepare_generator
 
 torch.backends.cudnn.benchmark = False  # Defaults to True
 
@@ -121,8 +121,8 @@ def eval_video(
             captions. Defaults to False.
     """
     scale_factor = cfg.params.scale_factor
-    device = set_up_cuda_device(0)
-    model = set_up_generator(cfg, device=device)
+    device = prepare_cuda_device(0)
+    model = prepare_generator(cfg, device=device)
     reader = torchvision.io.VideoReader(video_path.as_posix(), 'video')
 
     metadata = reader.get_metadata()
