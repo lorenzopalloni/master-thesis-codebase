@@ -18,6 +18,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision.utils import Image
 
+from binarization.config import get_default_config
 from binarization.datatools import (
     compose,
     list_directories,
@@ -429,7 +430,9 @@ def get_val_batches(cfg):
     )
 
 
-def get_test_batches(cfg):
+def get_test_batches(cfg: Gifnoc = None):
+    if cfg is None:
+        cfg = get_default_config()
     return BatchGenerator(
         cfg=cfg,
         stage=Stage.TEST,
