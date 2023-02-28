@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision.utils import Image
 
 from binarization.datatools import (
+    compose,
     list_directories,
     list_files,
     make_4times_downscalable,
@@ -301,10 +302,8 @@ def default_test_pipe(
     scale_factor: int = 4,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     del scale_factor
-    return (
-        min_max_scaler(F.pil_to_tensor(original_image)),
-        min_max_scaler(F.pil_to_tensor(compressed_image)),
-    )
+    pipe = compose(F.pil_to_tensor, min_max_scaler, make_4times_downscalable)
+    return F.pil_to_tensor(original_image), pipe(compressed_image)
 
 
 class BatchGenerator:
@@ -460,8 +459,10 @@ class CalibrationDataset(Dataset):
     def __getitem__(self, index: int):
         _, compressed_path = self.paired_paths[index]
         compressed_image = Image.open(compressed_path)
-        scaled_tensor = min_max_scaler(F.pil_to_tensor(compressed_image))
-        return make_4times_downscalable(scaled_tensor)
+        pipe = compose(
+            F.pil_to_tensor, min_max_scaler, make_4times_downscalable
+        )
+        return pipe(compressed_image)
 
 
 def get_calibration_dataloader(

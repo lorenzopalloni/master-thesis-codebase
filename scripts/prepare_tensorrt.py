@@ -12,7 +12,7 @@ from binarization.dataset import get_calibration_dataloader
 from binarization.traintools import prepare_cuda_device, prepare_generator
 
 
-def main(model_name: str = "unet"):
+def main(model_name: str = "unet", calibration_dataset_size: int = 10):
     assert model_name in {"unet", "srunet"}
 
     default_cfg = get_default_config()
@@ -20,7 +20,7 @@ def main(model_name: str = "unet"):
     device = prepare_cuda_device()
     calibration_dataloader = get_calibration_dataloader(
         cfg=default_cfg,
-        subset_size=5,
+        subset_size=calibration_dataset_size,
     )
 
     cfg = default_cfg.copy()
@@ -39,10 +39,9 @@ def main(model_name: str = "unet"):
     ]
     tensorrt_enabled_precisions = {torch.int8}  # Run with fp16
 
-    trt_dir = default_cfg.paths.artifacts_dir / "trt"
     tensorrt_calibrator = torch_tensorrt.ptq.DataLoaderCalibrator(
         calibration_dataloader,
-        cache_file=trt_dir / f"{cfg.model.name}_calibration.cache",
+        cache_file=cfg.paths.trt_dir / f"{cfg.model.name}_calibration.cache",
         use_cache=False,
         algo_type=torch_tensorrt.ptq.CalibrationAlgo.ENTROPY_CALIBRATION_2,
         device=device,
@@ -64,8 +63,8 @@ def main(model_name: str = "unet"):
         device=tensorrt_device,
     )
 
-    torch.jit.save(model_trt, trt_dir / f"{cfg.model.name}.ts")
+    torch.jit.save(model_trt, cfg.paths.trt_dir / f"{cfg.model.name}.ts")
 
 
 if __name__ == "__main__":
-    main()
+    main("srunet")
