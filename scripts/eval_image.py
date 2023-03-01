@@ -30,8 +30,13 @@ def model_speedtest(
 
     input_data = torch.randn(input_shape)
     input_data = input_data.to("cuda")
+
     if dtype == 'fp16':
         input_data = input_data.half()
+    elif dtype not in {'fp32', 'int8'}:
+        raise ValueError(
+            f"Unknown dtype: {dtype}. Choose in {'fp32', 'fp16', 'int8'}."
+        )
 
     print("Warm up ...")
     with torch.no_grad():
@@ -64,6 +69,7 @@ def eval_images(
     save_dir: Path,
     cfg: Gifnoc = None,
     n_evaluations: int | None = None,
+    dtype: str = "fp32",
     cuda_or_cpu: str = "cuda",
 ):
     """Upscales a bunch of images given a super-resolution model.
@@ -91,6 +97,12 @@ def eval_images(
             break
 
         compressed = compressed.to(cuda_or_cpu)
+        if dtype == 'fp16':
+            compressed = compressed.half()
+        elif dtype not in {'fp32', 'int8'}:
+            raise ValueError(
+                f"Unknown dtype: {dtype}. Choose in {'fp32', 'fp16', 'int8'}."
+            )
 
         gen.eval()
         with torch.no_grad():
@@ -110,34 +122,71 @@ def eval_images(
             plt.close(fig)  # close the current fig to prevent OOM issues
 
 
-if __name__ == "__main__":
-    model_name = "srunet"
-    n_evaluations = 10
-    cuda_or_cpu = "cuda"
+def eval_trt_models(
+    model_name: str = "unet",
+    n_evaluations: int = 10,
+    cuda_or_cpu: str = "cuda",
+    cfg: Gifnoc = None,
+):
+    if cfg is None:
+        cfg = get_default_config()
 
-    default_cfg = get_default_config()
-    user_cfg = default_cfg.copy()
+    available_dtypes = ("int8", "fp16", "fp32")
+    for dtype in available_dtypes:
+        quant_save_dir = cfg.paths.outputs_dir / f"{model_name}_{dtype}"
+        quant_save_dir.mkdir(exist_ok=True, parents=True)
+
+        quant_path = cfg.paths.trt_dir / f"{model_name}_{dtype}.ts"
+        quant_gen = torch.jit.load(quant_path).to(cuda_or_cpu).eval()
+
+        eval_images(
+            gen=quant_gen,
+            save_dir=quant_save_dir,
+            n_evaluations=n_evaluations,
+            dtype=dtype,
+        )
+        model_speedtest(quant_gen, dtype=dtype)
+
+
+def eval_model(
+    model_name: str = "unet",
+    n_evaluations: int = 10,
+    cfg: Gifnoc | None = None,
+    cuda_or_cpu: str = "cuda",
+):
+    if cfg is None:
+        cfg = get_default_config()
+
     ckpt_path = Path(
-        default_cfg.paths.artifacts_dir,
+        cfg.paths.artifacts_dir,
         "best_checkpoints",
         f"2022_12_19_{model_name}_4_318780.pth",
     )
-    user_cfg.model.ckpt_path_to_resume = ckpt_path
-    user_cfg.model.name = model_name
+    cfg.model.ckpt_path_to_resume = ckpt_path
+    cfg.model.name = model_name
 
-    save_dir = user_cfg.paths.outputs_dir / ckpt_path.stem
+    save_dir = cfg.paths.outputs_dir / ckpt_path.stem
     save_dir.mkdir(exist_ok=True, parents=True)
 
-    gen = prepare_generator(user_cfg, device=cuda_or_cpu).eval()
+    gen = prepare_generator(cfg, device=cuda_or_cpu).eval()
     eval_images(gen=gen, save_dir=save_dir, n_evaluations=n_evaluations)
     model_speedtest(gen)
 
-    quant_save_dir = user_cfg.paths.outputs_dir / f"quant_{model_name}"
-    quant_save_dir.mkdir(exist_ok=True, parents=True)
 
-    quant_path = user_cfg.paths.trt_dir / f"{model_name}.ts"
-    quant_gen = torch.jit.load(quant_path).to(cuda_or_cpu).eval()
-    eval_images(
-        gen=quant_gen, save_dir=quant_save_dir, n_evaluations=n_evaluations
-    )
-    model_speedtest(quant_gen)
+if __name__ == "__main__":
+    model_name = "srunet"
+    n_evaluations = 10
+
+    eval_model(model_name=model_name, n_evaluations=n_evaluations)
+    eval_trt_models(model_name=model_name, n_evaluations=n_evaluations)
+
+    # quant_save_dir = user_cfg.paths.outputs_dir / f"quant_{model_name}"
+    # quant_save_dir.mkdir(exist_ok=True, parents=True)
+
+    # quant_path = user_cfg.paths.trt_dir / f"{model_name}.ts"
+    # quant_gen = torch.jit.load(quant_path).to(cuda_or_cpu).eval()
+
+    # eval_images(
+    #     gen=quant_gen, save_dir=quant_save_dir, n_evaluations=n_evaluations
+    # )
+    # model_speedtest(quant_gen)

@@ -5,29 +5,13 @@
 - in `fast-sr-unet/evaluate_model.py` there is a ~260-lines-of-code function really messed up that can be useful as a reference to evaluate different metrics on low vs high quality videos
 
 ## recently DONEs
-- DONE - refactor UNet
-- DONE - refactor `binarization/models/common.py`
-- DONE - refactor SRUNet
-- DONE - be able to train SRUNet
-
-- DONE - fix normalization ([0, 1] -> [-1, 1])
-- DONE - fix clamp's
-- DONE - fix RGB -> BGR removing conversions
-- DONE - fix any bug caused by the previous three points
-
-- DONE - be able to evaluate with `eval_image.py` both models
-- DONE - be able to evaluate with `eval_video.py` both models
-
-- DONE - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
+- DONE - script to compile unet/srunet in int8/fp16/fp32 TensorRT
 
 ## high priority
 
-- implement binarized UNet
-- implement an evaluation function taking a cue from `fede-vaccaro/fast-sr-unet/evaluation_model.py`
-- train binarized UNet
-- implement binarized SRUNet
-- train binarized SRUNet
-- evaluate them all
+- keep track of average inference time in `scripts/eval_image.py`
+- draw plots about average inference times
+- add fp16/fp32 to results visualization in `notebooks/2022_02_28_model_evaluation.ipynb`
 
 ---
 
@@ -120,4 +104,16 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - run `./scripts/video_preprocessing.py -i data -s 4`
 - DONE - train UNet with `scale_factor == 4`
 - DONE - implement `eval_video.py` (video + timing) while UNet is training
+- DONE - refactor UNet
+- DONE - refactor `binarization/models/common.py`
+- DONE - refactor SRUNet
+- DONE - be able to train SRUNet
+- DONE - fix normalization ([0, 1] -> [-1, 1])
+- DONE - fix clamp's
+- DONE - fix RGB -> BGR removing conversions
+- DONE - fix any bug caused by the previous three points
+- DONE - be able to evaluate with `eval_image.py` both models
+- DONE - be able to evaluate with `eval_video.py` both models
+- DONE - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
+- DONE - implement an evaluation function taking a cue from `fede-vaccaro/fast-sr-unet/evaluation_model.py`
 
