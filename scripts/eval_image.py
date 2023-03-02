@@ -23,7 +23,7 @@ def model_speedtest(
     dtype: str = 'fp32',
     nwarmup: int = 10,
     nruns: int = 300,
-):
+) -> list[float]:
     import torch.backends.cudnn as cudnn
 
     cudnn.benchmark = True
@@ -62,6 +62,7 @@ def model_speedtest(
     print("Input shape:", input_data.size())
     print("Output shape:", output.shape)
     print(f"Average batch time: {np.mean(timings) / 1e+9:.6f} [s]")
+    return timings
 
 
 def eval_images(
@@ -127,11 +128,12 @@ def eval_trt_models(
     n_evaluations: int = 10,
     cuda_or_cpu: str = "cuda",
     cfg: Gifnoc = None,
-):
+) -> dict[str, list[float]]:
     if cfg is None:
         cfg = get_default_config()
 
     available_dtypes = ("int8", "fp16", "fp32")
+    timings_dict = {}
     for dtype in available_dtypes:
         quant_save_dir = cfg.paths.outputs_dir / f"{model_name}_{dtype}"
         quant_save_dir.mkdir(exist_ok=True, parents=True)
@@ -145,7 +147,10 @@ def eval_trt_models(
             n_evaluations=n_evaluations,
             dtype=dtype,
         )
-        model_speedtest(quant_gen, dtype=dtype)
+        timings_dict[f"{model_name}_{dtype}"] = model_speedtest(
+            quant_gen, dtype=dtype
+        )
+    return timings_dict
 
 
 def eval_model(
@@ -153,7 +158,7 @@ def eval_model(
     n_evaluations: int = 10,
     cfg: Gifnoc | None = None,
     cuda_or_cpu: str = "cuda",
-):
+) -> dict[str, list[float]]:
     if cfg is None:
         cfg = get_default_config()
 
@@ -170,15 +175,48 @@ def eval_model(
 
     gen = prepare_generator(cfg, device=cuda_or_cpu).eval()
     eval_images(gen=gen, save_dir=save_dir, n_evaluations=n_evaluations)
-    model_speedtest(gen)
+    return {model_name: model_speedtest(gen)}
 
 
 if __name__ == "__main__":
-    model_name = "srunet"
+    import json
+    from datetime import datetime
+
     n_evaluations = 10
 
-    eval_model(model_name=model_name, n_evaluations=n_evaluations)
-    eval_trt_models(model_name=model_name, n_evaluations=n_evaluations)
+    cfg = get_default_config()
+    today_str = datetime.now().strftime(r"%Y_%m_%d")
+
+    model_name = "unet"
+    timings_dict = eval_model(
+        model_name=model_name, n_evaluations=n_evaluations
+    )
+    trt_timings_dict = eval_trt_models(
+        model_name=model_name, n_evaluations=n_evaluations
+    )
+    timings_dict.update(trt_timings_dict)
+
+    save_path = (
+        cfg.paths.outputs_dir / f"{today_str}_timings_{model_name}.json"
+    )
+
+    with open(save_path, "w") as out_file:
+        json.dump(timings_dict, out_file)
+
+    model_name = "srunet"
+    timings_dict = eval_model(
+        model_name=model_name, n_evaluations=n_evaluations
+    )
+    trt_timings_dict = eval_trt_models(
+        model_name=model_name, n_evaluations=n_evaluations
+    )
+    timings_dict.update(trt_timings_dict)
+    save_path = (
+        cfg.paths.outputs_dir / f"{today_str}_timings_{model_name}.json"
+    )
+
+    with open(save_path, "w") as out_file:
+        json.dump(timings_dict, out_file)
 
     # quant_save_dir = user_cfg.paths.outputs_dir / f"quant_{model_name}"
     # quant_save_dir.mkdir(exist_ok=True, parents=True)

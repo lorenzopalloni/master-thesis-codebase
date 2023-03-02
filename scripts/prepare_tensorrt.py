@@ -16,19 +16,16 @@ def compile_int8_model(
     model_name: str = "unet", calibration_dataset_size: int = 10
 ):
     assert model_name in {"unet", "srunet"}
-
-    default_cfg = get_default_config()
-
     device = prepare_cuda_device()
+    cfg = get_default_config()
     calibration_dataloader = get_calibration_dataloader(
-        cfg=default_cfg,
+        cfg=cfg,
         subset_size=calibration_dataset_size,
     )
 
-    cfg = default_cfg.copy()
     cfg.model.name = model_name
     cfg.model.ckpt_path_to_resume = Path(
-        default_cfg.paths.artifacts_dir,
+        cfg.paths.artifacts_dir,
         "best_checkpoints",
         f"2022_12_19_{cfg.model.name}_4_318780.pth",
     )
@@ -70,15 +67,11 @@ def compile_int8_model(
 
 def compile_fp32_model(model_name: str = "unet"):
     assert model_name in {"unet", "srunet"}
-
-    default_cfg = get_default_config()
-
     device = prepare_cuda_device()
-
-    cfg = default_cfg.copy()
+    cfg = get_default_config()
     cfg.model.name = model_name
     cfg.model.ckpt_path_to_resume = Path(
-        default_cfg.paths.artifacts_dir,
+        cfg.paths.artifacts_dir,
         "best_checkpoints",
         f"2022_12_19_{cfg.model.name}_4_318780.pth",
     )
@@ -102,15 +95,12 @@ def compile_fp32_model(model_name: str = "unet"):
 
 def compile_fp16_model(model_name: str = "unet"):
     assert model_name in {"unet", "srunet"}
-
-    default_cfg = get_default_config()
-
     device = prepare_cuda_device()
 
-    cfg = default_cfg.copy()
+    cfg = get_default_config()
     cfg.model.name = model_name
     cfg.model.ckpt_path_to_resume = Path(
-        default_cfg.paths.artifacts_dir,
+        cfg.paths.artifacts_dir,
         "best_checkpoints",
         f"2022_12_19_{cfg.model.name}_4_318780.pth",
     )

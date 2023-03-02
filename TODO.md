@@ -6,12 +6,14 @@
 
 ## recently DONEs
 - DONE - script to compile unet/srunet in int8/fp16/fp32 TensorRT
+- DONE - keep track of average inference times in `scripts/eval_image.py`
+- DONE - add fp16/fp32 to results visualization in `notebooks/2022_02_28_model_evaluation.ipynb`
+- DONE - draw plots about average inference times
 
 ## high priority
 
-- keep track of average inference time in `scripts/eval_image.py`
-- draw plots about average inference times
-- add fp16/fp32 to results visualization in `notebooks/2022_02_28_model_evaluation.ipynb`
+- write an email to the prof including Leo to show results
+- start writing the thesis, it would need a new plan of action, especially considering time left
 
 ---
 
