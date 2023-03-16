@@ -1,3 +1,4 @@
+#pylint: disable=redefined-outer-name
 """Script to evaluate a video with a super-resolution model"""
 
 from __future__ import annotations
@@ -9,7 +10,6 @@ import torch
 import torchvision.transforms.functional as TF
 from gifnoc import Gifnoc
 from PIL import Image
-from tqdm import tqdm
 
 from binarization.config import get_default_config
 from binarization.traintools import prepare_cuda_device, prepare_generator
@@ -90,30 +90,32 @@ def postprocess(
     height_original: int,
 ) -> torch.Tensor:
     """Postprocesses a super-resolution generator output."""
-    generated = inv_min_max_scaler(generated)
-    generated = generated.clip(0, 255)
-    generated = generated / 255.0
-    return inv_make_4times_downscalable(
+    generated = generated.cpu()
+    generated = inv_make_4times_downscalable(
         generated=generated,
         width_original=width_original,
         height_original=height_original,
     )
+    generated = inv_min_max_scaler(generated)
+    generated = generated.clip(0, 255)
+    generated = generated / 255.0
+    return generated
 
 
-def compress(
-    input_fn: Path | str,
-    output_fn: Path | str,
+def compress_video(
+    original_video_path: Path,
+    compressed_video_path: Path,
     crf: int = 23,
     scale_factor: int = 4,
 ):
-    """Compresses a video.
+    """Compresses and downscale a video.
 
     Note: do not worry about the following warning (source: google it):
     "deprecated pixel format used, make sure you did set range correctly"
 
     Args:
-        input_fn (Union[Path, str]): Filename of the input video.
-        output_fn (Union[Path, str]): Filename of the compressed video.
+        original_video_path (Path): Filename of the input video.
+        compressed_video_path (Path): Filename of the compressed video.
         crf (int, optional): Constant Rate Factor. Defaults to 23.
         scale_factor (int): Scale factor. Defaults to 4.
     """
@@ -122,7 +124,7 @@ def compress(
     cmd = [
         'ffmpeg',
         '-i',
-        f'{input_fn}',
+        f'{original_video_path}',
         '-c:v',  # codec video
         'libx265',  # H.265/HEVC
         '-crf',  # constant rate factor
@@ -140,29 +142,30 @@ def compress(
             f'scale=w={scaled_w}:h={scaled_h}'  # downscale
             ',format=yuv420p'  # output format, defaults to yuv420p
         ),
-        f'{output_fn}',
+        f'{compressed_video_path}',
     ]
     subprocess.run(cmd, check=True)
 
 
 def video_to_frames(
-    input_fn: Path | str,
-    output_dir: Path | str,
+    video_path: Path,
+    frames_dir: Path,
     ext: str = ".jpg",
 ):
     """Splits a video into frames.
 
     Args:
-        input_fn (Union[Path, str]): Filename of the input video.
-        output_dir (Union[Path, str]): Output directory where all the frames
-        will be stored.
+        video_path (Path): Filename of the input video.
+        frames_dir (Path): Output directory where all the frames
+            will be stored.
         ext (str): Image file extension, {'.png', '.jpg'}.
     """
     assert ext in {'.png', '.jpg'}
+    video_name = Path(video_path).stem
     cmd = [
         'ffmpeg',
         '-i',
-        f'{input_fn}',
+        f'{Path(video_path).as_posix()}',
         '-vf',  # video filters
         r'select=not(mod(n\,1))',  # select all frames, ~same as 'select=1'
         '-vsync',
@@ -170,10 +173,30 @@ def video_to_frames(
         # '-vsync', '0',  # should avoid drops or duplications
         '-q:v',
         '1',
-        f'{ (Path(output_dir) / Path(input_fn).stem).as_posix() }_%4d{ext}',
+        f'{ (Path(frames_dir) / video_name).as_posix() }_%4d{ext}',
     ]
     subprocess.run(cmd, check=True)
 
+def preprocess(
+    compressed_path: Path,
+    dtype: str = "fp32",
+    cuda_or_cpu = "cuda",
+):
+    compressed = Image.open(compressed_path)
+    compressed = TF.pil_to_tensor(compressed)
+    compressed = min_max_scaler(compressed)
+    compressed = make_4times_downscalable(compressed)
+    if len(compressed.shape) == 3:
+        compressed = compressed.unsqueeze(0)
+
+    if dtype == 'fp16':
+        compressed = compressed.half()
+    elif dtype not in {'fp32', 'int8'}:
+        raise ValueError(
+            f"Unknown dtype: {dtype}. Choose in {'fp32', 'fp16', 'int8'}."
+        )
+
+    return compressed.to(cuda_or_cpu)
 
 def eval_images(
     gen: torch.nn.Module,
@@ -182,47 +205,54 @@ def eval_images(
     cfg: Gifnoc = None,
     dtype: str = "fp32",
     cuda_or_cpu: str = "cuda",
+    width_original: int = 1920,
+    height_original: int = 1080,
 ):
     if cfg is None:
         cfg = get_default_config()
     if cuda_or_cpu.startswith("cuda"):
         cuda_or_cpu = prepare_cuda_device(0)
 
-    for i, compressed_path in enumerate(compressed_path_list):
-        compressed = Image.open(compressed_path)
-        compressed = min_max_scaler(compressed)
-        compressed = make_4times_downscalable(compressed).unsqueeze(0)
-
-        if dtype == 'fp16':
-            compressed = compressed.half()
-        elif dtype not in {'fp32', 'int8'}:
-            raise ValueError(
-                f"Unknown dtype: {dtype}. Choose in {'fp32', 'fp16', 'int8'}."
+    id_counter = 0
+    for compressed_path in compressed_path_list:
+        compressed = preprocess(
+            compressed_path=compressed_path,
+            dtype=dtype,
+            cuda_or_cpu=cuda_or_cpu
+        )
+        generated = gen(compressed)
+        generated = postprocess(
+            generated=generated,
+            width_original=width_original,
+            height_original=height_original
+        )
+        for _ in range(generated.shape[0]):
+            generated_pil = TF.to_pil_image(generated.squeeze(0))
+            generated_path = Path(
+                generated_dir, f"generated_{id_counter:04d}.png"
             )
-
-        generated = gen(compressed.to(cuda_or_cpu)).clip(0, 1).cpu()
-        generated = inv_min_max_scaler(generated)
-        generated = generated.clip(0, 255)
-        generated = generated / 255.0
-        generated_pil = TF.to_pil_image(generated)
-        generated_path = Path(generated_dir, f"generated_{i:04d}.png")
-        generated_pil.save(generated_path)
-    # return generated
-    # return inv_make_4times_downscalable(generated=generated)
+            generated_pil.save(generated_path)
+            id_counter += 1
 
 
 def frames_to_video(
-    generated_dir: Path, output_video_path: Path, fps: int = 30
+    frames_dir: Path, video_path: Path, fps: int = 30
 ) -> None:
     """Convert a bunch of frames to a video.
 
-    Frame paths should follow a pattern like frame%03d.png
+    Frame names should follow a pattern like:
+        frames_dir/
+            - frame_0001.png
+            - frame_0002.png
+            - frame_0003.png
+            - ...
     """
+    video_name = '_'.join(Path(frames_dir).stem.split('_')[:-1])
     cmd = (
         f"ffmpeg -r {fps}"
-        f" -i {Path(generated_dir, 'generated').as_posix()}_%04d.png"
+        f" -i {(Path(frames_dir) / video_name).as_posix()}_%04d.png"
         f" -c:v libx264 -preset medium -crf 23"
-        f" {output_video_path.as_posix()}"
+        f" {video_path.as_posix()}"
     )
     subprocess.run(cmd.split(" "), check=True)
 
@@ -236,9 +266,10 @@ def vmaf(
     to_minute="00",
     to_second="03",
 ):
+    """Computes the VMAF quality score between two videos."""
 
     cmd = (
-        f"./ffmpeg -nostats -loglevel 0"
+        f"ffmpeg -nostats -loglevel 0"
         f" -r {fps} -i {original_video_path}"
         f" -r {fps} -i {generated_video_path}"
         f" -ss 00:{from_minute}:{from_second} -to 00:{to_minute}:{to_second}"
@@ -254,99 +285,83 @@ def vmaf(
 
 if __name__ == "__main__":
     cfg = get_default_config()
-    input_video_path = ""
-    compressed_video_path = ""
-    vmaf_dir = cfg.paths.artifacts_dir / "vmaf"
+    vmaf_dir: Path = cfg.paths.artifacts_dir / "vmaf"
+
+    original_video_path = vmaf_dir / "original.y4m"
+    compressed_video_path = vmaf_dir / "compressed.mp4"
+    generated_video_path = vmaf_dir / "generated.mp4"
+    another_original_video_path = vmaf_dir / "original.mp4"
+
     original_frames_dir = vmaf_dir / "original_frames"
     compressed_frames_dir = vmaf_dir / "compressed_frames"
     generated_frames_dir = vmaf_dir / "generated_frames"
+    vmaf_dir.mkdir(exist_ok=True, parents=False)
+    original_frames_dir.mkdir(exist_ok=True, parents=False)
+    compressed_frames_dir.mkdir(exist_ok=True, parents=False)
+    generated_frames_dir.mkdir(exist_ok=True, parents=False)
 
-    compress(input_fn=input_video_path, output_fn=compressed_video_path)
-    video_to_frames(
-        input_fn=input_video_path,
-        output_dir=vmaf_dir / "original_frames",
-        ext=".png",
+    # load generator
+    cuda_or_cpu = "cuda"
+    model_name = "srunet"
+    ckpt_path = Path(
+        cfg.paths.artifacts_dir,
+        "best_checkpoints",
+        f"2022_12_19_{model_name}_4_318780.pth",
     )
-    video_to_frames(
-        input_fn=compressed_video_path,
-        output_dir=vmaf_dir / "compressed_frames",
-        ext=".jpg",
+    cfg.model.ckpt_path_to_resume = ckpt_path
+    cfg.model.name = model_name
+    gen = prepare_generator(cfg, device=cuda_or_cpu).eval()
+
+    is_done = 0
+    if is_done:
+        compress_video(
+            original_video_path=original_video_path,
+            compressed_video_path=compressed_video_path
+        )
+        video_to_frames(
+            video_path=original_video_path,
+            frames_dir=original_frames_dir,
+            ext=".png",
+        )
+        frames_to_video(
+            frames_dir=original_frames_dir,
+            video_path=another_original_video_path
+        )
+
+        video_to_frames(
+            video_path=compressed_video_path,
+            frames_dir=compressed_frames_dir,
+            ext=".jpg",
+        )
+        eval_images(
+            gen=gen,
+            compressed_path_list=sorted(compressed_frames_dir.iterdir()),
+            generated_dir=generated_frames_dir
+        )
+        frames_to_video(
+            frames_dir=generated_frames_dir,
+            video_path=generated_video_path
+        )
+
+    vmaf(
+        original_video_path=another_original_video_path,
+        generated_video_path=generated_video_path
     )
-    eval_images()
-    frames_to_video()
-    vmaf()
 
 
-def eval_images(
-    gen: torch.nn.Module,
-    save_dir: Path,
-    cfg: Gifnoc = None,
-    n_evaluations: int | None = None,
-    dtype: str = "fp32",
-    cuda_or_cpu: str = "cuda",
-):
-    """Upscales a bunch of images given a super-resolution model.
 
-    Args:
-        gen (torch.nn.Module): a PyTorch generator model.
-        save_dir (Path): path to directory where to save evaluation figures.
-        cfg (Gifnoc, optional): configuration settings. The only useful
-            option to be modified here is `cfg.params.buffer_size`.
-            Defaults to None.
-        n_evaluations (Union[int, None], optional): num of images to evaluate.
-            Defaults to None (that means all the available frames).
-        cuda_or_cpu (str, optional): {"cuda", "cpu"}. Defaults to "cuda".
-    """
-    if cfg is None:
-        cfg = get_default_config()
-    if cuda_or_cpu.startswith("cuda"):
-        cuda_or_cpu = prepare_cuda_device(0)
-
-    test_batches = get_test_batches(cfg)
-    progress_bar = tqdm(test_batches, total=n_evaluations)
-
-    for step_id, (original, compressed) in enumerate(progress_bar):
-        if n_evaluations and step_id > n_evaluations - 1:
-            break
-
-        compressed = compressed.to(cuda_or_cpu)
-        if dtype == 'fp16':
-            compressed = compressed.half()
-        elif dtype not in {'fp32', 'int8'}:
-            raise ValueError(
-                f"Unknown dtype: {dtype}. Choose in {'fp32', 'fp16', 'int8'}."
-            )
-
-        gen.eval()
-        with torch.no_grad():
-            generated = gen(compressed)
-
-        compressed = compressed.cpu()
-        generated = generated.cpu()
-        generated = postprocess(original=original, generated=generated)
-
-        for i in range(original.shape[0]):
-            fig = draw_validation_fig(
-                original_image=original[i],
-                compressed_image=compressed[i],
-                generated_image=generated[i],
-            )
-            fig.savefig(save_dir / f'{step_id:05d}_validation_fig.jpg')
-            plt.close(fig)  # close the current fig to prevent OOM issues
+# f"ffmpeg -r {fps} -i img%03d.png -c:v libx264 -preset medium -crf 23 output.mp4"
 
 
-f"ffmpeg -r {fps} -i img%03d.png -c:v libx264 -preset medium -crf 23 output.mp4"
+# "ffmpeg -r 30 -i img%03d.png -c:v libx264 -preset medium -crf 23 output.mp4"
 
-
-"ffmpeg -r 30 -i img%03d.png -c:v libx264 -preset medium -crf 23 output.mp4"
-
-vmaf_command = (
-    f"./ffmpeg -nostats -loglevel 0"
-    f" -r {fps} -i {dest_dir / (video_prefix + '.mp4')}"
-    f" -r {fps} -i {dest_dir / 'output_testing.mp4'}"
-    f" -ss 00:{from_minute}:{from_second_} -to 00:{to_minute}:{to_second_}"
-    f" -lavfi '[0:v]setpts=PTS-STARTPTS[reference];"
-    f" [1:v]scale=-1:{resolution_hq}:flags=bicubic,setpts=PTS-STARTPTS[distorted];"
-    f" [distorted][reference]libvmaf=log_fmt=xml:log_path=/dev/stdout'"
-    f" -f null - | grep -i 'aggregateVMAF'"
-)
+# vmaf_command = (
+#     f"./ffmpeg -nostats -loglevel 0"
+#     f" -r {fps} -i {dest_dir / (video_prefix + '.mp4')}"
+#     f" -r {fps} -i {dest_dir / 'output_testing.mp4'}"
+#     f" -ss 00:{from_minute}:{from_second_} -to 00:{to_minute}:{to_second_}"
+#     f" -lavfi '[0:v]setpts=PTS-STARTPTS[reference];"
+#     f" [1:v]scale=-1:{resolution_hq}:flags=bicubic,setpts=PTS-STARTPTS[distorted];"
+#     f" [distorted][reference]libvmaf=log_fmt=xml:log_path=/dev/stdout'"
+#     f" -f null - | grep -i 'aggregateVMAF'"
+# )
