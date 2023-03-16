@@ -2,32 +2,20 @@
 
 > resume with: `ssh solaris && screen -r binarization`
 
-- in `fast-sr-unet/evaluate_model.py` there is a ~260-lines-of-code function really messed up that can be useful as a reference to evaluate different metrics on low vs high quality videos
-
-## recently DONEs
-- DONE - script to compile unet/srunet in int8/fp16/fp32 TensorRT
-- DONE - keep track of average inference times in `scripts/eval_image.py`
-- DONE - add fp16/fp32 to results visualization in `notebooks/2022_02_28_model_evaluation.ipynb`
-- DONE - draw plots about average inference times
-
 ## high priority
-
-- write an email to the prof including Leo to show results
-- start writing the thesis, it would need a new plan of action, especially considering time left
-
----
+- pipeline with inputs (original video, model) -> VMAF score
+- eval models with VMAF
+- train again with original frames in .png instead of .jpg
+- train again changing the perceptual loss
+- eval again
 
 ## medium priority
-- original frames in .png instead of .jpg
 - check structural reparametrization in DiracNets and RepVGG
-
----
 
 ## low priority
 - take a look in piq: LPIPS seems to yield different results than in the
     original implementation
 
----
 ### How to compile torchvision with ffmpeg support:
     1. git clone git@github.com:pytorch/vision.git
     2. sudo apt install ffmpeg
@@ -117,5 +105,20 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
 - DONE - be able to evaluate with `eval_image.py` both models
 - DONE - be able to evaluate with `eval_video.py` both models
 - DONE - check at line 88 in `vaccaro/pytorch_unet.py` dimensions of `self.conv_adapter.weight`
-- DONE - implement an evaluation function taking a cue from `fede-vaccaro/fast-sr-unet/evaluation_model.py`
+- DONE - implement an eval script taking a cue from `fede-vaccaro/fast-sr-unet/evaluation_model.py`
+- DONE - script to compile unet/srunet in int8/fp16/fp32 TensorRT
+- DONE - keep track of average inference times in `scripts/eval_image.py`
+- DONE - add fp16/fp32 to results visualization in `notebooks/2022_02_28_model_evaluation.ipynb`
+- DONE - draw plots about average inference times
+- DONE - write an email to the prof including Leo to show results
+- DONE - start writing the thesis
+- DONE - implement a pipeline to:
+    - compress/scale an original video
+    - `video_to_frames` on compressed video
+    - `video_to_frames` on original video
+    - `eval_images` generate frames from compressed frames
+    - `frames_to_video` on original frames
+    - `frames_to_video` on generated frames
+    - `vmaf` between original, and generated videos
+- DONE - implement a script to compute VMAF
 
