@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
+import json
 from pathlib import Path
 
 import torch
 import torchvision.transforms.functional as TF
+import torch_tensorrt  # keep it
 from gifnoc import Gifnoc
 from PIL import Image
 
@@ -257,52 +260,104 @@ def frames_to_video(
     subprocess.run(cmd.split(" "), check=True)
 
 
-def vmaf(
+def compute_vmaf(
     original_video_path: Path,
     generated_video_path: Path,
     fps: int = 30,
-    from_minute="00",
-    from_second="00",
-    to_minute="00",
-    to_second="03",
-):
+) -> tuple[float, float]:
     """Computes the VMAF quality score between two videos."""
 
+    model_path = Path(
+        Path.home(),
+        "ffmpeg_sources/vmaf-2.1.1/model/vmaf_v0.6.1.json"
+    )
+
     cmd = (
-        f"ffmpeg -nostats -loglevel 0"
-        f" -r {fps} -i {original_video_path}"
-        f" -r {fps} -i {generated_video_path}"
-        f" -ss 00:{from_minute}:{from_second} -to 00:{to_minute}:{to_second}"
-        f" -lavfi '[0:v]setpts=PTS-STARTPTS[reference];"
-        f" [1:v]scale=-1:1080:flags=bicubic,setpts=PTS-STARTPTS[distorted];"
-        f" [distorted][reference]libvmaf=log_fmt=xml:log_path=/dev/stdout'"
-        f" -f null - | grep -i 'aggregateVMAF'"
+        f'ffmpeg -nostats -loglevel 0'
+        f' -r {fps} -i {original_video_path}'
+        f' -r {fps} -i {generated_video_path}'
+        # f' -ss 00:{from_minute}:{from_second} -to 00:{to_minute}:{to_second}'
+        f' -lavfi "[0:v]setpts=PTS-STARTPTS[reference];'
+        f' [1:v]scale=-1:1080:flags=bicubic,setpts=PTS-STARTPTS[distorted];'
+        f' [distorted][reference]libvmaf='
+        f'log_fmt=json:'
+        f'log_path=/dev/stdout:'
+        f'model_path={model_path}:'
+        f'n_threads=4"'
+        f' -f null - | grep "mean"'
     )
-    return subprocess.run(
-        cmd.split(" "), check=True, capture_output=True, text=True
-    )
+    res = os.popen(cmd).read()
+    mean, hmean = [
+        float(res.split('"')[idx].strip("\n :,")) for idx in (-3, -1)
+    ]
+    return mean, hmean
 
+def generate_video(
+    gen,
+    original_video_path: Path,
+    output_dir: Path,
+    cfg: Gifnoc = None,
+    dtype: str = "fp32",
+    cuda_or_cpu: str = "cuda",
+    width_original: int = 1920,
+    height_original: int = 1080,
+):
+    compressed_video_path = output_dir / "compressed.mp4"
+    generated_video_path = output_dir / "generated.mp4"
+    another_original_video_path = output_dir / "original.mp4"
 
-if __name__ == "__main__":
-    cfg = get_default_config()
-    vmaf_dir: Path = cfg.paths.artifacts_dir / "vmaf"
-
-    original_video_path = vmaf_dir / "original.y4m"
-    compressed_video_path = vmaf_dir / "compressed.mp4"
-    generated_video_path = vmaf_dir / "generated.mp4"
-    another_original_video_path = vmaf_dir / "original.mp4"
-
-    original_frames_dir = vmaf_dir / "original_frames"
-    compressed_frames_dir = vmaf_dir / "compressed_frames"
-    generated_frames_dir = vmaf_dir / "generated_frames"
-    vmaf_dir.mkdir(exist_ok=True, parents=False)
+    original_frames_dir = output_dir / "original_frames"
+    compressed_frames_dir = output_dir / "compressed_frames"
+    generated_frames_dir = output_dir / "generated_frames"
+    output_dir.mkdir(exist_ok=True, parents=False)
     original_frames_dir.mkdir(exist_ok=True, parents=False)
     compressed_frames_dir.mkdir(exist_ok=True, parents=False)
     generated_frames_dir.mkdir(exist_ok=True, parents=False)
 
-    # load generator
-    cuda_or_cpu = "cuda"
-    model_name = "srunet"
+    compress_video(
+        original_video_path=original_video_path,
+        compressed_video_path=compressed_video_path
+    )
+    video_to_frames(
+        video_path=original_video_path,
+        frames_dir=original_frames_dir,
+        ext=".png",
+    )
+    frames_to_video(
+        frames_dir=original_frames_dir,
+        video_path=another_original_video_path
+    )
+
+    video_to_frames(
+        video_path=compressed_video_path,
+        frames_dir=compressed_frames_dir,
+        ext=".jpg",
+    )
+    eval_images(
+        gen=gen,
+        compressed_path_list=sorted(compressed_frames_dir.iterdir()),
+        generated_dir=generated_frames_dir,
+        cfg=cfg,
+        dtype=dtype,
+        cuda_or_cpu=cuda_or_cpu,
+        width_original=width_original,
+        height_original=height_original,
+    )
+    frames_to_video(
+        frames_dir=generated_frames_dir,
+        video_path=generated_video_path
+    )
+
+def generate_video_and_compute_vmaf(
+    original_video_path: Path,
+    model_name: str = "unet",
+    cfg: Gifnoc | None = None,
+    cuda_or_cpu: str = "cuda",
+) -> dict[str, list[float]]:
+
+    if cfg is None:
+        cfg = get_default_config()
+
     ckpt_path = Path(
         cfg.paths.artifacts_dir,
         "best_checkpoints",
@@ -310,58 +365,151 @@ if __name__ == "__main__":
     )
     cfg.model.ckpt_path_to_resume = ckpt_path
     cfg.model.name = model_name
-    gen = prepare_generator(cfg, device=cuda_or_cpu).eval()
+    # gen = prepare_generator(cfg, device=cuda_or_cpu).eval()
 
-    is_done = 0
-    if is_done:
-        compress_video(
-            original_video_path=original_video_path,
-            compressed_video_path=compressed_video_path
-        )
-        video_to_frames(
-            video_path=original_video_path,
-            frames_dir=original_frames_dir,
-            ext=".png",
-        )
-        frames_to_video(
-            frames_dir=original_frames_dir,
-            video_path=another_original_video_path
-        )
+    vmaf_dir = cfg.paths.artifacts_dir / "vmaf"
+    output_dir = vmaf_dir / ckpt_path.stem
+    output_dir.mkdir(exist_ok=True, parents=True)
 
-        video_to_frames(
-            video_path=compressed_video_path,
-            frames_dir=compressed_frames_dir,
-            ext=".jpg",
-        )
-        eval_images(
-            gen=gen,
-            compressed_path_list=sorted(compressed_frames_dir.iterdir()),
-            generated_dir=generated_frames_dir
-        )
-        frames_to_video(
-            frames_dir=generated_frames_dir,
-            video_path=generated_video_path
-        )
-
-    vmaf(
-        original_video_path=another_original_video_path,
-        generated_video_path=generated_video_path
+    # generate_video(
+    #     gen,
+    #     original_video_path,
+    #     output_dir=output_dir,
+    #     cfg=cfg,
+    # )
+    mean, hmean = compute_vmaf(
+        original_video_path=output_dir / "original.mp4",
+        generated_video_path=output_dir / "generated.mp4",
     )
 
+    return {model_name: (mean, hmean)}
+
+def generate_video_and_compute_vmaf_for_trt_models(
+    original_video_path: Path,
+    model_name: str = "unet",
+    cuda_or_cpu: str = "cuda",
+    cfg: Gifnoc = None,
+) -> dict[str, list[float]]:
+    if cfg is None:
+        cfg = get_default_config()
+
+    available_dtypes = ("int8", "fp16", "fp32")
+    res_dict = {}
+    for dtype in available_dtypes:
+
+        vmaf_dir = cfg.paths.artifacts_dir / "vmaf"
+        output_dir = vmaf_dir / f"{model_name}_{dtype}"
+        output_dir.mkdir(exist_ok=True, parents=True)
+
+        quant_path = cfg.paths.trt_dir / f"{model_name}_{dtype}.ts"
+        quant_gen = torch.jit.load(quant_path).to(cuda_or_cpu).eval()
+
+        generate_video(
+            quant_gen, original_video_path, output_dir=output_dir,
+            cfg=cfg, dtype=dtype, cuda_or_cpu=cuda_or_cpu
+        )
+        res_dict[f"{model_name}_{dtype}"] = compute_vmaf(
+            original_video_path=output_dir / "original.mp4",
+            generated_video_path=output_dir / "generated.mp4",
+        )
+    return res_dict
+
+if __name__ == "__main__":
+    cfg = get_default_config()
+    vmaf_dir: Path = cfg.paths.artifacts_dir / "vmaf"
+    original_video_path = vmaf_dir / "original.y4m"
+
+    res = {}
+    res.update(
+        generate_video_and_compute_vmaf(
+            original_video_path=original_video_path,
+            model_name="unet",
+        )
+    )
+    res.update(
+        generate_video_and_compute_vmaf(
+            original_video_path=original_video_path,
+            model_name="srunet",
+        )
+    )
+    res.update(
+        generate_video_and_compute_vmaf_for_trt_models(
+            original_video_path=original_video_path,
+            model_name="unet",
+        )
+    )
+    res.update(
+        generate_video_and_compute_vmaf_for_trt_models(
+            original_video_path=original_video_path,
+            model_name="srunet",
+        )
+    )
+    with open(vmaf_dir / "vmaf_res.json", "w") as out_file:
+        json.dump(res, out_file)
 
 
-# f"ffmpeg -r {fps} -i img%03d.png -c:v libx264 -preset medium -crf 23 output.mp4"
 
+# if __name__ == "__main__":
+#     cfg = get_default_config()
+#     vmaf_dir: Path = cfg.paths.artifacts_dir / "vmaf"
 
-# "ffmpeg -r 30 -i img%03d.png -c:v libx264 -preset medium -crf 23 output.mp4"
+#     original_video_path = vmaf_dir / "original.y4m"
+#     compressed_video_path = vmaf_dir / "compressed.mp4"
+#     generated_video_path = vmaf_dir / "generated.mp4"
+#     another_original_video_path = vmaf_dir / "original.mp4"
 
-# vmaf_command = (
-#     f"./ffmpeg -nostats -loglevel 0"
-#     f" -r {fps} -i {dest_dir / (video_prefix + '.mp4')}"
-#     f" -r {fps} -i {dest_dir / 'output_testing.mp4'}"
-#     f" -ss 00:{from_minute}:{from_second_} -to 00:{to_minute}:{to_second_}"
-#     f" -lavfi '[0:v]setpts=PTS-STARTPTS[reference];"
-#     f" [1:v]scale=-1:{resolution_hq}:flags=bicubic,setpts=PTS-STARTPTS[distorted];"
-#     f" [distorted][reference]libvmaf=log_fmt=xml:log_path=/dev/stdout'"
-#     f" -f null - | grep -i 'aggregateVMAF'"
-# )
+#     original_frames_dir = vmaf_dir / "original_frames"
+#     compressed_frames_dir = vmaf_dir / "compressed_frames"
+#     generated_frames_dir = vmaf_dir / "generated_frames"
+#     vmaf_dir.mkdir(exist_ok=True, parents=False)
+#     original_frames_dir.mkdir(exist_ok=True, parents=False)
+#     compressed_frames_dir.mkdir(exist_ok=True, parents=False)
+#     generated_frames_dir.mkdir(exist_ok=True, parents=False)
+
+#     # load generator
+#     cuda_or_cpu = "cuda"
+#     model_name = "srunet"
+#     ckpt_path = Path(
+#         cfg.paths.artifacts_dir,
+#         "best_checkpoints",
+#         f"2022_12_19_{model_name}_4_318780.pth",
+#     )
+#     cfg.model.ckpt_path_to_resume = ckpt_path
+#     cfg.model.name = model_name
+
+#     is_done = 0
+#     if is_done:
+#         gen = prepare_generator(cfg, device=cuda_or_cpu).eval()
+#         compress_video(
+#             original_video_path=original_video_path,
+#             compressed_video_path=compressed_video_path
+#         )
+#         video_to_frames(
+#             video_path=original_video_path,
+#             frames_dir=original_frames_dir,
+#             ext=".png",
+#         )
+#         frames_to_video(
+#             frames_dir=original_frames_dir,
+#             video_path=another_original_video_path
+#         )
+
+#         video_to_frames(
+#             video_path=compressed_video_path,
+#             frames_dir=compressed_frames_dir,
+#             ext=".jpg",
+#         )
+#         eval_images(
+#             gen=gen,
+#             compressed_path_list=sorted(compressed_frames_dir.iterdir()),
+#             generated_dir=generated_frames_dir
+#         )
+#         frames_to_video(
+#             frames_dir=generated_frames_dir,
+#             video_path=generated_video_path
+#         )
+
+#     print(compute_vmaf(
+#         original_video_path=another_original_video_path,
+#         generated_video_path=generated_video_path,
+#     ))

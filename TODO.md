@@ -3,18 +3,16 @@
 > resume with: `ssh solaris && screen -r binarization`
 
 ## high priority
-- pipeline with inputs (original video, model) -> VMAF score
-- eval models with VMAF
 - train again with original frames in .png instead of .jpg
 - train again changing the perceptual loss
 - eval again
 
 ## medium priority
-- check structural reparametrization in DiracNets and RepVGG
 
 ## low priority
 - take a look in piq: LPIPS seems to yield different results than in the
     original implementation
+- change repo's name
 
 ### How to compile torchvision with ffmpeg support:
     1. git clone git@github.com:pytorch/vision.git
@@ -120,5 +118,6 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
     - `frames_to_video` on original frames
     - `frames_to_video` on generated frames
     - `vmaf` between original, and generated videos
-- DONE - implement a script to compute VMAF
+- DONE - pipeline with inputs (original video, model) -> VMAF score
+- DONE - eval models with VMAF
 
