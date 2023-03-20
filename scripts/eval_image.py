@@ -24,6 +24,7 @@ def model_speedtest(
     nwarmup: int = 10,
     nruns: int = 300,
 ) -> list[float]:
+    """Performs speed benchmark on a given generator model."""
     import torch.backends.cudnn as cudnn
 
     cudnn.benchmark = True
@@ -45,7 +46,7 @@ def model_speedtest(
     torch.cuda.synchronize()
 
     print("Start timing ...")
-    timings = []
+    timings: list[float] = []
     with torch.no_grad():
         for i in range(1, nruns + 1):
             start_time = time.perf_counter_ns()
@@ -83,6 +84,7 @@ def eval_images(
             Defaults to None.
         n_evaluations (Union[int, None], optional): num of images to evaluate.
             Defaults to None (that means all the available frames).
+        dtype (str): Choose in {"fp32", "fp16", "int8"}. Defaults to "fp32".
         cuda_or_cpu (str, optional): {"cuda", "cpu"}. Defaults to "cuda".
     """
     if cfg is None:
@@ -111,13 +113,18 @@ def eval_images(
 
         compressed = compressed.cpu()
         generated = generated.cpu()
-        generated = postprocess(original=original, generated=generated)
+        generated = postprocess(
+            generated=generated,
+            width_original=original.shape[-1],
+            height_original=original.shape[-2],
+        )
 
         for i in range(original.shape[0]):
             fig = draw_validation_fig(
                 original_image=original[i],
                 compressed_image=compressed[i],
                 generated_image=generated[i],
+                figsize=(36, 15),
             )
             fig.savefig(save_dir / f'{step_id:05d}_validation_fig.jpg')
             plt.close(fig)  # close the current fig to prevent OOM issues
@@ -129,6 +136,7 @@ def eval_trt_models(
     cuda_or_cpu: str = "cuda",
     cfg: Gifnoc = None,
 ) -> dict[str, list[float]]:
+    """Evaluates TRT-compiled UNet/SRUNet models."""
     if cfg is None:
         cfg = get_default_config()
 
@@ -159,13 +167,15 @@ def eval_model(
     cfg: Gifnoc | None = None,
     cuda_or_cpu: str = "cuda",
 ) -> dict[str, list[float]]:
+    """Evaluates UNet/SRUNet models."""
     if cfg is None:
         cfg = get_default_config()
 
     ckpt_path = Path(
         cfg.paths.artifacts_dir,
         "best_checkpoints",
-        f"2022_12_19_{model_name}_4_318780.pth",
+        # f"2022_12_19_{model_name}_4_318780.pth",
+        f"2023_03_17_{model_name}_2_139999.pth",
     )
     cfg.model.ckpt_path_to_resume = ckpt_path
     cfg.model.name = model_name
@@ -200,7 +210,7 @@ if __name__ == "__main__":
         cfg.paths.outputs_dir / f"{today_str}_timings_{model_name}.json"
     )
 
-    with open(save_path, "w") as out_file:
+    with open(save_path, "w", encoding="utf-8") as out_file:
         json.dump(timings_dict, out_file)
 
     model_name = "srunet"
@@ -215,7 +225,7 @@ if __name__ == "__main__":
         cfg.paths.outputs_dir / f"{today_str}_timings_{model_name}.json"
     )
 
-    with open(save_path, "w") as out_file:
+    with open(save_path, "w", encoding="utf-8") as out_file:
         json.dump(timings_dict, out_file)
 
     # quant_save_dir = user_cfg.paths.outputs_dir / f"quant_{model_name}"

@@ -53,7 +53,7 @@ class WriteToVideo:
 
         self.writer = cv2.VideoWriter(
             filename=Path(save_path).as_posix(),
-            fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
+            fourcc=cv2.VideoWriter_fourcc(*'MP4V'),
             fps=30,
             frameSize=(self.frame_width, self.frame_height),
         )
@@ -159,7 +159,7 @@ def eval_video(
             queue.put((img, interpolated_img))
             queue.task_done()
 
-    def show_pic(queue):
+    def show_pic(queue: Queue) -> None:
         while True:
             tensor_img = queue.get()
             img = tensor_to_numpy(tensor_img)

@@ -37,32 +37,32 @@ def inv_min_max_scaler(
     return (tensor * (tensor_max - tensor_min) + tensor_min).int()
 
 
+def make_4times_divisible(an_integer: int) -> int:
+    """Given an integer `an_integer`, returns another integer that:
+    - is greater than `an_integer`
+    - is divisible at least four times by 2
+    - is the closest to `an_integer`
+
+    Adapts image sizes to feed a UNet-like architecture.
+
+    Args:
+        an_integer (int): an integer greater than 0.
+
+    Returns:
+        int: an integer with the properties described above.
+    """
+    assert (
+        an_integer > 0
+    ), f"Input should be > 0, but `{an_integer}` was provided."
+    if an_integer % 2 != 0:  # make it even
+        an_integer += 1
+    while an_integer / 2**4 % 2 != 0:  # assure divisibility by 16
+        an_integer += 2  # jump from one even number to the next one
+    return an_integer
+
+
 def make_4times_downscalable(image: torch.Tensor) -> torch.Tensor:
     """Pads until img_h and img_w are both divisible by 2 at least 4 times."""
-
-    def make_4times_divisible(an_integer: int) -> int:
-        """Given an integer `an_integer`, returns another integer that:
-        - is greater than `an_integer`
-        - is divisible at least four times by 2
-        - is the closest to `an_integer`
-
-        Adapts image sizes to feed a UNet-like architecture.
-
-        Args:
-            an_integer (int): an integer greater than 0.
-
-        Returns:
-            int: an integer with the properties described above.
-        """
-        assert (
-            an_integer > 0
-        ), f"Input should be > 0, but `{an_integer}` was provided."
-        if an_integer % 2 != 0:  # make it even
-            an_integer += 1
-        while an_integer / 2**4 % 2 != 0:  # assure divisibility by 16
-            an_integer += 2  # jump from one even number to the next one
-        return an_integer
-
     height, width = image.shape[-2], image.shape[-1]
     adjusted_height = make_4times_divisible(height)
     adjusted_width = make_4times_divisible(width)
