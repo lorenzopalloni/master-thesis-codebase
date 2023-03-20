@@ -3,25 +3,15 @@
 > resume with: `ssh solaris && screen -r binarization`
 
 ## high priority
-- train again with original frames in .png instead of .jpg
-- train again changing the perceptual loss
 - eval again
 
 ## medium priority
+- train again changing the perceptual loss
 
 ## low priority
 - take a look in piq: LPIPS seems to yield different results than in the
     original implementation
 - change repo's name
-
-### How to compile torchvision with ffmpeg support:
-    1. git clone git@github.com:pytorch/vision.git
-    2. sudo apt install ffmpeg
-    3. sudo apt install libavcodec-dev
-    4. sudo apt install libavfilter-dev
-    5. sudo apt install libswscale-dev
-    6. pip install --upgrade av==8.1.0
-    7. cd ./vision && python3.8 setup.py install
 
 ### BVI-DVC alternative
 An alternative to the official BVI-DVC dataset can be found at [https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
@@ -120,4 +110,5 @@ Also, note that the original BVI-DVC.zip is 85.7GB, and it contains 800 sequence
     - `vmaf` between original, and generated videos
 - DONE - pipeline with inputs (original video, model) -> VMAF score
 - DONE - eval models with VMAF
+- DONE - train again with original frames in .png instead of .jpg
 

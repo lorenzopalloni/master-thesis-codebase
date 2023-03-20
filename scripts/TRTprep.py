@@ -1,3 +1,4 @@
+# pylint: disable=no-member
 """Compile UNet and SRUNet with torch_tensorrt"""
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from binarization.traintools import prepare_cuda_device, prepare_generator
 def compile_int8_model(
     model_name: str = "unet", calibration_dataset_size: int = 10
 ):
+    """Compiles UNet/SRUNet with INT8 precision using TensorRT."""
     assert model_name in {"unet", "srunet"}
     device = prepare_cuda_device()
     cfg = get_default_config()
@@ -66,6 +68,7 @@ def compile_int8_model(
 
 
 def compile_fp32_model(model_name: str = "unet"):
+    """Compiles UNet/SRUNet using TensorRT."""
     assert model_name in {"unet", "srunet"}
     device = prepare_cuda_device()
     cfg = get_default_config()
@@ -94,6 +97,7 @@ def compile_fp32_model(model_name: str = "unet"):
 
 
 def compile_fp16_model(model_name: str = "unet"):
+    """Compiles UNet/SRUNet into FP16 precision using TensorRT."""
     assert model_name in {"unet", "srunet"}
     device = prepare_cuda_device()
 
@@ -123,10 +127,11 @@ def compile_fp16_model(model_name: str = "unet"):
 
 
 def main(model_name: str = "unet"):
+    """Compiles UNet/SRUNet with different precisions using TensorRT."""
 
-    # print(f">>> Compiling {model_name} in int8...")
-    # compile_int8_model(model_name)
-    # print(f">>> ... DONE: compiling {model_name} in int8.")
+    print(f">>> Compiling {model_name} in int8...")
+    compile_int8_model(model_name)
+    print(f">>> ... DONE: compiling {model_name} in int8.")
 
     print(f">>> Compiling {model_name} in fp16...")
     compile_fp16_model(model_name)
