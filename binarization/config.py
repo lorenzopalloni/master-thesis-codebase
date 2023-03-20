@@ -30,7 +30,7 @@ class ParamsConfig:
     limit_val_batches: int | None = None
     save_ckpt_every: int = 20_000
     num_workers: int = 1
-    num_epochs: int = 1
+    num_epochs: int = 3
     lpips_weight: float = 1e-0  # LPIPS weight
     ssim_weight: float = 5e-1  # SSIM weight
     adversarial_loss_weight: float = 1e-3  # Adversarial loss weight
