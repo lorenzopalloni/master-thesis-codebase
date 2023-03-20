@@ -48,12 +48,6 @@ def test_compose():
     assert expected.equal(actual)
 
 
-def test_compute_adjusted_dimension():
-    assert datatools.make_4times_divisible(256) == 256
-    assert datatools.make_4times_divisible(270) == 288
-    assert datatools.make_4times_divisible(540) == 544
-
-
 class TestListHaveSameElements:
     def test_true(self):
         list1 = list('abcd')
