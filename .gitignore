@@ -187,5 +187,5 @@ calibration.cache
 *.ts
 
 # evaluation
-!notebooks/2023_02_28_model_evaluation.ipynb
+!notebooks/2023_02_28_visualize_quantitative_results.ipynb
 !outputs/2023_02_28_results.csv
