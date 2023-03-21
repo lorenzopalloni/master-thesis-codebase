@@ -1,4 +1,11 @@
-"""Script to evaluate a video with a super-resolution model"""
+"""Given a high-resolution (HR) video, this script creates a new video with
+the same height and twice the width. Each HR frame is first downscaled using
+a simple resize method. Next, two transformations are applied to upscale the
+frame back to its original resolution, and these frames are placed side by
+side in the new video for easy comparison. The first transformation uses
+bilinear interpolation, while the second employs a super-resolution deep
+learning model.
+"""
 
 from __future__ import annotations
 
@@ -16,11 +23,11 @@ from tqdm import tqdm
 
 from binarization.config import get_default_config
 from binarization.datatools import (
-    bicubic_interpolation,
     concatenate_images,
     make_4times_divisible,
     make_4times_downscalable,
     min_max_scaler,
+    tensor_image_interpolation,
     tensor_to_numpy,
 )
 from binarization.traintools import prepare_cuda_device, prepare_generator
@@ -155,7 +162,7 @@ def eval_video(
             img = frame['data']
             img = min_max_scaler(img)
             img = make_4times_downscalable(img).unsqueeze(0)
-            interpolated_img = bicubic_interpolation(img, scale_factor)
+            interpolated_img = tensor_image_interpolation(img, scale_factor)
             queue.put((img, interpolated_img))
             queue.task_done()
 

@@ -323,15 +323,15 @@ def concatenate_images(
     return torch.cat([img1, img2], dim=3)
 
 
-def bicubic_interpolation(
-    tensor_img: torch.Tensor, scale_factor: int = 4
+def tensor_image_interpolation(
+    tensor_img: torch.Tensor, scale_factor: int = 4, mode: str = "bilinear"
 ) -> torch.Tensor:
-    """Upscales with bicubic interpolation a given image."""
+    """Upscales by interpolation a given image."""
     return torch.clip(
         F.interpolate(
             tensor_img,
             scale_factor=scale_factor,
-            mode='bicubic',
+            mode=mode,
         ),
         min=0,
         max=1,
