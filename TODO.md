@@ -3,6 +3,8 @@
 > resume with: `ssh solaris && screen -r binarization`
 
 ## high priority
+- refactor `scripts/compute_qualitative_results.py`
+- write `scripts/compute_quantitative_results.py` using the corrisponding notebook
 - eval again
 
 ## medium priority
