@@ -29,7 +29,8 @@ def compile_int8_model(
     cfg.model.ckpt_path_to_resume = Path(
         cfg.paths.artifacts_dir,
         "best_checkpoints",
-        f"2022_12_19_{cfg.model.name}_4_318780.pth",
+        # f"2022_12_19_{cfg.model.name}_4_318780.pth",
+        f"2023_03_24_{cfg.model.name}_2_191268.pth",
     )
 
     model = prepare_generator(cfg, device=device)
@@ -76,7 +77,8 @@ def compile_fp32_model(model_name: str = "unet"):
     cfg.model.ckpt_path_to_resume = Path(
         cfg.paths.artifacts_dir,
         "best_checkpoints",
-        f"2022_12_19_{cfg.model.name}_4_318780.pth",
+        # f"2022_12_19_{cfg.model.name}_4_318780.pth",
+        f"2023_03_24_{cfg.model.name}_2_191268.pth",
     )
 
     model = prepare_generator(cfg, device=device)
@@ -106,7 +108,8 @@ def compile_fp16_model(model_name: str = "unet"):
     cfg.model.ckpt_path_to_resume = Path(
         cfg.paths.artifacts_dir,
         "best_checkpoints",
-        f"2022_12_19_{cfg.model.name}_4_318780.pth",
+        # f"2022_12_19_{cfg.model.name}_4_318780.pth",
+        f"2023_03_24_{cfg.model.name}_2_191268.pth",
     )
 
     model = prepare_generator(cfg, device=device)
@@ -143,4 +146,4 @@ def main(model_name: str = "unet"):
 
 
 if __name__ == "__main__":
-    main("unet")
+    main("srunet")

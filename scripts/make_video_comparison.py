@@ -231,13 +231,15 @@ if __name__ == '__main__':
     unet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_13_unet_0_39999.pth",
+        # "2022_12_13_unet_0_39999.pth",
+        "2023_03_24_unet_2_191268.pth",
     )
 
     srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_13_srunet_0_39999.pth",
+        # "2022_12_13_srunet_0_39999.pth",
+        "2023_03_24_srunet_2_191268.pth",
     )
 
     srunet_cfg.model.ckpt_path_to_resume = srunet_ckpt_path

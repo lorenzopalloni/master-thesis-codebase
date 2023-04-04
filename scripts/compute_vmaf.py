@@ -159,7 +159,8 @@ def generate_video_and_compute_vmaf(
     ckpt_path = Path(
         cfg.paths.artifacts_dir,
         "best_checkpoints",
-        f"2022_12_19_{model_name}_4_318780.pth",
+        # f"2022_12_19_{model_name}_4_318780.pth",
+        f"2023_03_24_{model_name}_2_191268.pth",
     )
     cfg.model.ckpt_path_to_resume = ckpt_path
     cfg.model.name = model_name

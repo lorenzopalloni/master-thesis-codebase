@@ -94,5 +94,5 @@ class CustomLPIPS(torch.nn.Module):
         normalized_y_pred = torch.clamp(normalized_y_pred, -1.0, 1.0)
         normalized_y_true = y_true - self.magic_mean
         normalized_y_true = torch.clamp(normalized_y_true, -1.0, 1.0)
-        ssim_op = self.lpips(normalized_y_pred, normalized_y_true)
-        return ssim_op
+        lpips_op = self.lpips(normalized_y_pred, normalized_y_true)
+        return lpips_op
