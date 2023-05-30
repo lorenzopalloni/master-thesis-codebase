@@ -208,14 +208,7 @@ def run_experiment(
 
 if __name__ == "__main__":
     default_cfg = get_default_config()
-
-    # default_cfg.params.limit_train_batches = 500
-    # default_cfg.params.limit_val_batches = 30
-    # default_cfg.params.num_epochs = 2
-    # default_cfg.params.batch_size = 4
-
     args = parse_args(cfg=default_cfg)
-
     default_cfg.model.name = args.model_name
     default_cfg.params.device = args.device
     default_cfg.model.ckpt_path_to_resume = args.ckpt_path_to_resume

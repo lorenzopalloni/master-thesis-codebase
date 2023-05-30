@@ -2,7 +2,7 @@
 data/*
 artifacts/
 checkpoints/
-outputs/
+outputs/*
 old_data/
 *.mp4
 
@@ -185,3 +185,8 @@ cython_debug/
 # tensorrt
 calibration.cache
 *.ts
+
+# evaluation
+!notebooks/2023_02_28_visualize_quantitative_results.ipynb
+!notebooks/2023_04_01_qualitative_results.ipynb
+!outputs/2023_02_28_results.csv

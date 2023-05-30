@@ -1,5 +1,5 @@
 # pylint: disable=missing-module-docstring,missing-function-docstring,missing-class-docstring
-from scripts.video_preprocessing import (
+from binarization.videotools import (
     files_have_same_ext,
     prepare_directories,
     prepare_original_videos_dir,

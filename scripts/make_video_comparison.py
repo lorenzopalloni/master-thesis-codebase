@@ -1,4 +1,11 @@
-"""Script to evaluate a video with a super-resolution model"""
+"""Given a high-resolution (HR) video, this script creates a new video with
+the same height and twice the width. Each HR frame is first downscaled using
+a simple resize method. Next, two transformations are applied to upscale the
+frame back to its original resolution, and these frames are placed side by
+side in the new video for easy comparison. The first transformation uses
+bilinear interpolation, while the second employs a super-resolution deep
+learning model.
+"""
 
 from __future__ import annotations
 
@@ -16,11 +23,11 @@ from tqdm import tqdm
 
 from binarization.config import get_default_config
 from binarization.datatools import (
-    bicubic_interpolation,
     concatenate_images,
     make_4times_divisible,
     make_4times_downscalable,
     min_max_scaler,
+    tensor_image_interpolation,
     tensor_to_numpy,
 )
 from binarization.traintools import prepare_cuda_device, prepare_generator
@@ -53,7 +60,7 @@ class WriteToVideo:
 
         self.writer = cv2.VideoWriter(
             filename=Path(save_path).as_posix(),
-            fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
+            fourcc=cv2.VideoWriter_fourcc(*'MP4V'),
             fps=30,
             frameSize=(self.frame_width, self.frame_height),
         )
@@ -155,11 +162,11 @@ def eval_video(
             img = frame['data']
             img = min_max_scaler(img)
             img = make_4times_downscalable(img).unsqueeze(0)
-            interpolated_img = bicubic_interpolation(img, scale_factor)
+            interpolated_img = tensor_image_interpolation(img, scale_factor)
             queue.put((img, interpolated_img))
             queue.task_done()
 
-    def show_pic(queue):
+    def show_pic(queue: Queue) -> None:
         while True:
             tensor_img = queue.get()
             img = tensor_to_numpy(tensor_img)
@@ -224,13 +231,15 @@ if __name__ == '__main__':
     unet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_13_unet_0_39999.pth",
+        # "2022_12_13_unet_0_39999.pth",
+        "2023_03_24_unet_2_191268.pth",
     )
 
     srunet_ckpt_path = Path(
         default_cfg.paths.artifacts_dir,
         "best_checkpoints",
-        "2022_12_13_srunet_0_39999.pth",
+        # "2022_12_13_srunet_0_39999.pth",
+        "2023_03_24_srunet_2_191268.pth",
     )
 
     srunet_cfg.model.ckpt_path_to_resume = srunet_ckpt_path

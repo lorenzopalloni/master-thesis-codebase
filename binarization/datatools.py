@@ -15,6 +15,7 @@ import PIL
 import torch
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
+from PIL import Image
 
 
 def compose(*functions):
@@ -34,6 +35,102 @@ def inv_min_max_scaler(
 ) -> torch.Tensor:
     """Inverts min_max_scaler function."""
     return (tensor * (tensor_max - tensor_min) + tensor_min).int()
+
+
+def make_4times_divisible(an_integer: int) -> int:
+    """Given an integer `an_integer`, returns another integer that:
+    - is greater than `an_integer`
+    - is divisible at least four times by 2
+    - is the closest to `an_integer`
+
+    Adapts image sizes to feed a UNet-like architecture.
+
+    Args:
+        an_integer (int): an integer greater than 0.
+
+    Returns:
+        int: an integer with the properties described above.
+    """
+    assert (
+        an_integer > 0
+    ), f"Input should be > 0, but `{an_integer}` was provided."
+    if an_integer % 2 != 0:  # make it even
+        an_integer += 1
+    while an_integer / 2**4 % 2 != 0:  # assure divisibility by 16
+        an_integer += 2  # jump from one even number to the next one
+    return an_integer
+
+
+def make_4times_downscalable(image: torch.Tensor) -> torch.Tensor:
+    """Pads until img_h and img_w are both divisible by 2 at least 4 times."""
+    height, width = image.shape[-2], image.shape[-1]
+    adjusted_height = make_4times_divisible(height)
+    adjusted_width = make_4times_divisible(width)
+    return TF.pad(
+        image,
+        padding=[
+            (adjusted_width - width) // 2,  # left/right
+            (adjusted_height - height) // 2,  # top/bottom
+        ],
+    )
+
+
+def inv_make_4times_downscalable(
+    generated: torch.Tensor,
+    width_original: int,
+    height_original: int,
+) -> torch.Tensor:
+    """Crops as much as needed to invert `make_4times_downscalable`."""
+    height_generated, width_generated = (
+        generated.shape[-2],
+        generated.shape[-1],
+    )
+    height_offset = (height_generated - height_original) // 2
+    width_offset = (width_generated - width_original) // 2
+    return TF.crop(
+        generated, height_offset, width_offset, height_original, width_original
+    )
+
+
+def preprocess(
+    compressed_path: Path,
+    dtype: str = "fp32",
+    cuda_or_cpu="cuda",
+):
+    """Preprocesses a compressed frame for evaluation."""
+    compressed = Image.open(compressed_path)
+    compressed = TF.pil_to_tensor(compressed)
+    compressed = min_max_scaler(compressed)
+    compressed = make_4times_downscalable(compressed)
+    if len(compressed.shape) == 3:
+        compressed = compressed.unsqueeze(0)
+
+    if dtype == 'fp16':
+        compressed = compressed.half()
+    elif dtype not in {'fp32', 'int8'}:
+        raise ValueError(
+            f"Unknown dtype: {dtype}. Choose in {'fp32', 'fp16', 'int8'}."
+        )
+
+    return compressed.to(cuda_or_cpu)
+
+
+def postprocess(
+    generated: torch.Tensor,
+    width_original: int,
+    height_original: int,
+) -> torch.Tensor:
+    """Postprocesses a super-resolution generator output."""
+    generated = generated.cpu()
+    generated = inv_make_4times_downscalable(
+        generated=generated,
+        width_original=width_original,
+        height_original=height_original,
+    )
+    generated = inv_min_max_scaler(generated)
+    generated = generated.clip(0, 255)
+    generated = generated / 255.0
+    return generated
 
 
 def get_starting_random_position(
@@ -80,78 +177,11 @@ def random_crop_images(
     return original_patch, compressed_patch
 
 
-def make_4times_divisible(an_integer: int) -> int:
-    """Given an integer `an_integer`, returns another integer that:
-    - is greater than `an_integer`
-    - is divisible at least four times by 2
-    - is the closest to `an_integer`
-
-    Adapts image sizes to feed a UNet-like architecture.
-
-    Args:
-        an_integer (int): an integer greater than 0.
-
-    Returns:
-        int: an integer with the properties described above.
-    """
-    assert (
-        an_integer > 0
-    ), f"Input should be > 0, but `{an_integer}` was provided."
-    if an_integer % 2 != 0:  # make it even
-        an_integer += 1
-    while an_integer / 2**4 % 2 != 0:  # assure divisibility by 16
-        an_integer += 2  # jump from one even number to the next one
-    return an_integer
-
-
-def make_4times_downscalable(image: torch.Tensor) -> torch.Tensor:
-    """Pads until img_h and img_w are both divisible by 2 at least 4 times."""
-    height, width = image.shape[-2], image.shape[-1]
-    adjusted_height = make_4times_divisible(height)
-    adjusted_width = make_4times_divisible(width)
-    return TF.pad(
-        image,
-        padding=[
-            (adjusted_width - width) // 2,  # left/right
-            (adjusted_height - height) // 2,  # top/bottom
-        ],
-    )
-
-
-def inv_make_4times_downscalable(
-    original: torch.Tensor, generated: torch.Tensor
-) -> torch.Tensor:
-    """Crops as much as needed to invert `make_4times_downscalable`."""
-    # TODO: we don't need the original image as input here,
-    # it would be fine to give h/w of the original image
-    # and the compressed_image_made_downscalable.
-    height_original, width_original = original.shape[-2], original.shape[-1]
-    height_generated, width_generated = (
-        generated.shape[-2],
-        generated.shape[-1],
-    )
-    height_offset = (height_generated - height_original) // 2
-    width_offset = (width_generated - width_original) // 2
-    return TF.crop(
-        generated, height_offset, width_offset, height_original, width_original
-    )
-
-
-def postprocess(
-    original: torch.Tensor, generated: torch.Tensor
-) -> torch.Tensor:
-    """Postprocesses a super-resolution generator output."""
-    generated = inv_min_max_scaler(generated)
-    generated = generated.clip(0, 255)
-    generated = generated / 255.0
-    return inv_make_4times_downscalable(original=original, generated=generated)
-
-
 def draw_validation_fig(
     original_image: torch.Tensor,
     compressed_image: torch.Tensor,
     generated_image: torch.Tensor,
-    figsize: tuple[int, int] = (12, 5),
+    figsize: tuple[int, int] = (36, 15),
     save_path: Path | None = None,
 ) -> plt.Figure:
     """Draws three images in a row with matplotlib."""
@@ -293,15 +323,15 @@ def concatenate_images(
     return torch.cat([img1, img2], dim=3)
 
 
-def bicubic_interpolation(
-    tensor_img: torch.Tensor, scale_factor: int = 4
+def tensor_image_interpolation(
+    tensor_img: torch.Tensor, scale_factor: int = 4, mode: str = "bilinear"
 ) -> torch.Tensor:
-    """Upscales with bicubic interpolation a given image."""
+    """Upscales by interpolation a given image."""
     return torch.clip(
         F.interpolate(
             tensor_img,
             scale_factor=scale_factor,
-            mode='bicubic',
+            mode=mode,
         ),
         min=0,
         max=1,

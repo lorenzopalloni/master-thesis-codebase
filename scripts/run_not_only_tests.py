@@ -1,10 +1,13 @@
+# pylint: disable=line-too-long
 """Collection of scripts for general package-level utilities"""
+
+from __future__ import annotations
 
 import argparse
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict
 
 
 def check_venv(venv_name: str):
@@ -14,10 +17,10 @@ def check_venv(venv_name: str):
         raise ValueError(f'You should enable `{venv_name}` virtual env.')
 
 
-def set_up_test_assets(project_dir: Path = None):
+def prepare_tests(project_dir: Path | None = None):
     """Sets up resources for testing"""
     if project_dir is None:
-        project_dir = Path(__file__).parent
+        project_dir = Path(__file__).parent.parent
     tests_dir = project_dir / 'tests'
     assets_dir = tests_dir / 'assets'
     original_videos_dir = assets_dir / 'original_videos'
@@ -43,38 +46,39 @@ def install_requirements():
         "pip install pytest pylint mypy black flake8 pre-commit",  # development packages
         "pip install mlflow",  # tracking experiments
         "pip install numpy matplotlib seaborn pandas",
-        f"pip install -e {os.path.join('..', 'gifnoc')}",  # I'll probably hardcode it in binarization
+        # f"pip install -e {os.path.join('..', 'gifnoc')}",  # I'll probably hardcode it in binarization
     ]
     for cmd in command_list:
         subprocess.run(cmd.split(' '), check=True)
 
 
-def run_test():
+def run_tests():
     """Sets up resources for testing, and runs tests"""
-    set_up_test_assets()
+    prepare_tests()
     proc = subprocess.run('python -m pytest tests -vv'.split(' '), check=True)
     return proc.stdout
 
 
 def run_coverage():
     """Sets up resources for testing, runs tests, and runs coverage"""
-    set_up_test_assets()
+    prepare_tests()
     subprocess.run('coverage run -m pytest tests'.split(' '), check=True)
     subprocess.run('coverage report -m'.split(' '), check=True)
 
 
-def parse_args(command_dict: Dict[str, Callable]) -> argparse.Namespace:
+def parse_args(command_dict: dict[str, Callable]) -> argparse.Namespace:
     """Argument parser."""
     parser = argparse.ArgumentParser(
-        prog='python run.py', description='Run custom configurations.'
+        prog=f'python {__file__}', description='Run custom configurations.'
     )
     parser.add_argument('command', choices=command_dict.keys())
     return parser.parse_args()
 
 
 def main():
+    """Run tests, coverage, or install some required packages."""
     command_dict = {
-        'test': run_test,
+        'tests': run_tests,
         'coverage': run_coverage,
         'install_requirements': install_requirements,
     }

@@ -1,27 +1,26 @@
-"""Utilities for compressing and frame splitting a video."""
+"""Utilities for compressing and frame splitting videos."""
 
 from __future__ import annotations
 
-import argparse
 import shutil
 import subprocess
 from pathlib import Path
 
 
-def compress(
-    input_fn: Path | str,
-    output_fn: Path | str,
+def compress_video(
+    original_video_path: Path,
+    compressed_video_path: Path,
     crf: int = 23,
     scale_factor: int = 4,
 ):
-    """Compresses a video.
+    """Compresses and downscale a video.
 
     Note: do not worry about the following warning (source: google it):
     "deprecated pixel format used, make sure you did set range correctly"
 
     Args:
-        input_fn (Union[Path, str]): Filename of the input video.
-        output_fn (Union[Path, str]): Filename of the compressed video.
+        original_video_path (Path): Filename of the input video.
+        compressed_video_path (Path): Filename of the compressed video.
         crf (int, optional): Constant Rate Factor. Defaults to 23.
         scale_factor (int): Scale factor. Defaults to 4.
     """
@@ -30,7 +29,7 @@ def compress(
     cmd = [
         'ffmpeg',
         '-i',
-        f'{input_fn}',
+        f'{original_video_path}',
         '-c:v',  # codec video
         'libx265',  # H.265/HEVC
         '-crf',  # constant rate factor
@@ -48,26 +47,30 @@ def compress(
             f'scale=w={scaled_w}:h={scaled_h}'  # downscale
             ',format=yuv420p'  # output format, defaults to yuv420p
         ),
-        f'{output_fn}',
+        f'{compressed_video_path}',
     ]
     subprocess.run(cmd, check=True)
 
 
 def video_to_frames(
-    input_fn: Path | str,
-    output_dir: Path | str,
+    video_path: Path,
+    frames_dir: Path,
+    ext: str = ".jpg",
 ):
-    """Splits a video into .jpg frames.
+    """Splits a video into frames.
 
     Args:
-        input_fn (Union[Path, str]): Filename of the input video.
-        output_dir (Union[Path, str]): Output directory where all the frames
-        will be stored.
+        video_path (Path): Filename of the input video.
+        frames_dir (Path): Output directory where all the frames
+            will be stored.
+        ext (str): Image file extension, {'.png', '.jpg'}.
     """
+    assert ext in {'.png', '.jpg'}
+    video_name = Path(video_path).stem
     cmd = [
         'ffmpeg',
         '-i',
-        f'{input_fn}',
+        f'{Path(video_path).as_posix()}',
         '-vf',  # video filters
         r'select=not(mod(n\,1))',  # select all frames, ~same as 'select=1'
         '-vsync',
@@ -75,14 +78,34 @@ def video_to_frames(
         # '-vsync', '0',  # should avoid drops or duplications
         '-q:v',
         '1',
-        f'{ (Path(output_dir) / Path(input_fn).stem).as_posix() }_%4d.jpg',
+        f'{ (Path(frames_dir) / video_name).as_posix() }_%4d{ext}',
     ]
     subprocess.run(cmd, check=True)
 
 
+def frames_to_video(frames_dir: Path, video_path: Path, fps: int = 30) -> None:
+    """Convert a bunch of frames to a video.
+
+    Frame names should follow a pattern like:
+        frames_dir/
+            - frame_0001.png
+            - frame_0002.png
+            - frame_0003.png
+            - ...
+    """
+    video_name = '_'.join(Path(frames_dir).stem.split('_')[:-1])
+    cmd = (
+        f"ffmpeg -r {fps}"
+        f" -i {(Path(frames_dir) / video_name).as_posix()}_%04d.png"
+        f" -c:v libx264 -preset medium -crf 23"
+        f" {video_path.as_posix()}"
+    )
+    subprocess.run(cmd.split(" "), check=True)
+
+
 def files_have_same_ext(
     input_dir: Path | str, enable_assert: bool = False
-) -> bool | Exception:
+) -> bool | ValueError:
     """Returns True if all the files in `input_dir` have the same extension."""
     input_dir = Path(input_dir)
     files = list(x for x in input_dir.iterdir() if not x.is_dir())
@@ -91,7 +114,7 @@ def files_have_same_ext(
         return ans
     if ans:
         return True
-    raise Exception(
+    raise ValueError(
         f'All files in "{input_dir.absolute().as_posix()}" must have the'
         ' same extension.'
     )
@@ -130,7 +153,7 @@ def prepare_directories(
     input_dir: Path | str,
     original_videos_namedir: str = 'original_videos',
 ) -> tuple[Path, ...]:
-    """Asserts a standard dir structure for original/compressed videos/frames."""
+    """Ensures a standard dirtree for original/compressed videos/frames."""
     original_dir = prepare_original_videos_dir(
         input_dir=input_dir, original_videos_namedir=original_videos_namedir
     )
@@ -150,48 +173,3 @@ def prepare_directories(
         original_frames_dir,
         compressed_frames_dir,
     )
-
-
-def arg_parse() -> argparse.Namespace:
-    """Parses input arguments."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input_dir', type=str, default='.')
-    parser.add_argument('-s', '--scale_factor', type=int, default=4)
-    return parser.parse_args()
-
-
-def main():
-    """Main routine for video preprocessing."""
-    args = arg_parse()
-    input_dir = Path(args.input_dir)
-    (
-        original_dir,
-        compressed_videos_dir,
-        original_frames_dir,
-        compressed_frames_dir,
-    ) = prepare_directories(input_dir)
-
-    for original_fn in original_dir.iterdir():
-        compressed_fn = Path(compressed_videos_dir, original_fn.stem + '.mp4')
-
-        compress(
-            input_fn=original_fn,
-            output_fn=compressed_fn,
-            scale_factor=args.scale_factor,
-        )
-
-        original_frames_subdir = original_frames_dir / original_fn.stem
-        original_frames_subdir.mkdir(exist_ok=True)
-        compressed_frames_subdir = compressed_frames_dir / compressed_fn.stem
-        compressed_frames_subdir.mkdir(exist_ok=True)
-
-        video_to_frames(
-            input_fn=original_fn, output_dir=original_frames_subdir
-        )
-        video_to_frames(
-            input_fn=compressed_fn, output_dir=compressed_frames_subdir
-        )
-
-
-if __name__ == '__main__':
-    main()
