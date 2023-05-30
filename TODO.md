@@ -1,19 +1,14 @@
 # TODO List
 
-> resume with: `ssh solaris && screen -r binarization`
-
 ## high priority
-- refactor `scripts/compute_qualitative_results.py`
-- write `scripts/compute_quantitative_results.py` using the corrisponding notebook
-- eval again
+
+- rename the codebase (suggestions: ??)
+- handle the gifnoc package (rename, refactor, then publish on PyPI)
 
 ## medium priority
 - train again changing the perceptual loss
 
 ## low priority
-- take a look in piq: LPIPS seems to yield different results than in the
-    original implementation
-- change repo's name
 
 ### BVI-DVC alternative
 An alternative to the official BVI-DVC dataset can be found at [https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip](https://data.bris.ac.uk/datasets/tar/3h0hduxrq4awq2ffvhabjzbzi1.zip)
